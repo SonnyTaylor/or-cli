@@ -1,8 +1,3 @@
----
-name: or-image-gen
-description: Find and use image generation, image editing, and vision models via OpenRouter. Use when the user wants to generate images, edit images, analyze images, describe photos, do OCR, find the best image model, or compare image model quality. Image generation requires models with image output (`or models -t image`). Image understanding requires vision models (`or models --vision`).
----
-
 # Image Models with `or`
 
 ## Finding the Right Model Type

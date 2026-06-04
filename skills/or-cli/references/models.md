@@ -1,11 +1,4 @@
----
-name: or-models
-description: Browse, search, filter, and compare AI models on OpenRouter. Use when the user asks about available models, wants to find a model for a task, needs pricing info, wants to compare options, asks "which model should I use", needs to check model capabilities, or wants provider/uptime info. Also use when you need to find a model for a specific modality: text, image generation, image understanding (vision), embeddings, audio, video, reranking, or transcription.
----
-
 # Model Discovery with `or`
-
-You have the `or` CLI tool for querying OpenRouter in real-time. **Never hardcode or guess model names** — always query live data. The model landscape changes constantly.
 
 ## Core Workflow
 

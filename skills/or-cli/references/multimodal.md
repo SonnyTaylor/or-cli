@@ -1,8 +1,3 @@
----
-name: or-multimodal
-description: Process images, audio, and video with AI models via OpenRouter. Use when the user wants to analyze images, transcribe audio, summarize videos, extract text from screenshots, describe what's in a photo, translate speech, or understand video content. Requires vision/audio/video-capable models (find with `or models --vision` or `or models -t audio`).
----
-
 # Multimodal Inputs with `or`
 
 The `or chat` command supports sending images, audio, and video files to compatible models.

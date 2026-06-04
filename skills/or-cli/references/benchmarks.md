@@ -1,8 +1,3 @@
----
-name: or-benchmarks
-description: Query Artificial Analysis benchmark data for AI models. Use when comparing model quality, speed, or cost-effectiveness, or when the user asks about model benchmarks, ELO ratings, coding ability, intelligence scores, or "which model is best". Covers LLMs (15 evaluations), image generation, image editing, TTS, and video models.
----
-
 # Benchmarks with `or`
 
 Powered by [Artificial Analysis](https://artificialanalysis.ai) independent benchmarks.

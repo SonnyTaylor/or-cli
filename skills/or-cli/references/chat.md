@@ -1,8 +1,3 @@
----
-name: or-chat
-description: Send messages to any AI model on OpenRouter. Use when the user wants to ask a model a question, get a completion, talk to a specific model, get help from a smarter model, test a model's response, or have a model analyze/summarize/generate content. Also use for multimodal tasks: analyzing images, transcribing audio, summarizing video, extracting text from screenshots, or generating embeddings. Can target any model by ID.
----
-
 # Chat with `or`
 
 Use `or chat` to send single-shot messages to any model on OpenRouter. Supports text, images, audio, and video inputs.
