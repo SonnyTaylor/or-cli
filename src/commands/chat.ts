@@ -292,14 +292,26 @@ export function chatCommand(): Command {
                 const parts = url.split(",");
                 const b64 = parts[1] ?? "";
                 const imgBuf = Buffer.from(b64, "base64");
-                const savePath = resolve(opts.save);
+                let savePath = resolve(opts.save);
+                
+                // Auto-detect SVG content and fix extension
+                const contentStr = imgBuf.toString("utf-8");
+                const isSvg = contentStr.trimStart().startsWith("<svg") || contentStr.trimStart().startsWith("<?xml");
+                if (isSvg && !savePath.endsWith(".svg")) {
+                  const newPath = savePath.replace(/\.(png|jpg|jpeg|webp|gif)$/i, ".svg");
+                  if (!opts.quiet) {
+                    console.log(chalk.yellow(`⚠ Model returned SVG — saving as ${extname(newPath)} instead of ${extname(savePath)}`));
+                  }
+                  savePath = newPath;
+                }
+                
                 const dir = dirname(savePath);
                 if (!existsSync(dir)) {
                   mkdirSync(dir, { recursive: true });
                 }
                 writeFileSync(savePath, imgBuf);
                 if (!opts.quiet) {
-                  console.log(chalk.green(`✓ Image saved to ${savePath} (${(imgBuf.length / 1024).toFixed(0)}KB)`));
+                  console.log(chalk.green(`✓ Saved to ${savePath} (${(imgBuf.length / 1024).toFixed(0)}KB)`));
                 }
               } else if (url.startsWith("http")) {
                 if (!opts.quiet) {

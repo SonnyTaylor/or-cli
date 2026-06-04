@@ -20,6 +20,20 @@ Image models have two pricing types:
 
 Per-image models (Recraft, xAI Grok, Microsoft MAI, Sourceful) are often cheaper for single images but don't support token-based cost optimization.
 
+## Output Formats
+
+Most models return raster images (PNG/JPEG), but **Recraft vector models return SVG**:
+
+| Model | Output | Use `--save` with |
+|-------|--------|-------------------|
+| `recraft/recraft-v4-vector` | SVG | `.svg` |
+| `recraft/recraft-v4.1-vector` | SVG | `.svg` |
+| `recraft/recraft-v4-pro-vector` | SVG | `.svg` |
+| `recraft/recraft-v4.1-pro-vector` | SVG | `.svg` |
+| All other image models | PNG/JPEG | `.png` |
+
+Vector models are ideal for logos, icons, and UI assets — output is infinitely scalable.
+
 ```bash
 # Image generation models (all 30+ models including Recraft, FLUX, xAI, etc.)
 or models -t image
