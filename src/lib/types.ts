@@ -47,9 +47,17 @@ export interface ORModelEndpoint {
   uptime_30m?: number;
 }
 
+export interface ChatContentPart {
+  type: "text" | "image_url" | "input_audio" | "video_url";
+  text?: string;
+  image_url?: { url: string; detail?: string };
+  input_audio?: { data: string; format: string };
+  video_url?: { url: string };
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool";
-  content: string;
+  content: string | ChatContentPart[];
   name?: string;
 }
 

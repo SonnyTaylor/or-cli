@@ -1,11 +1,44 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
+import { readFileSync, existsSync } from "fs";
+import { resolve, extname } from "path";
 import { requireOpenRouterKey, getConfig } from "../lib/config";
 import { chatCompletion, chatCompletionStream, fetchModels, combinedPrice } from "../lib/openrouter";
 import { getFormat, error } from "../lib/format";
 import { appendHistory, generateId } from "../lib/history";
-import type { ChatMessage } from "../lib/types";
+import type { ChatMessage, ChatContentPart } from "../lib/types";
+
+// MIME type mappings
+const IMAGE_EXTS: Record<string, string> = {
+  ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+  ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+};
+
+const AUDIO_EXTS: Record<string, string> = {
+  ".wav": "audio/wav", ".mp3": "audio/mpeg", ".m4a": "audio/mp4",
+  ".flac": "audio/flac", ".ogg": "audio/ogg", ".webm": "audio/webm",
+};
+
+const VIDEO_EXTS: Record<string, string> = {
+  ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+  ".avi": "video/x-msvideo", ".mkv": "video/x-matroska",
+};
+
+function fileToBase64(filePath: string): string {
+  const absPath = resolve(filePath);
+  if (!existsSync(absPath)) {
+    error(`File not found: ${filePath}`);
+    process.exit(1);
+  }
+  const buffer = readFileSync(absPath);
+  return buffer.toString("base64");
+}
+
+function getMimeType(filePath: string, extMap: Record<string, string>, fallback: string): string {
+  const ext = extname(filePath).toLowerCase();
+  return extMap[ext] ?? fallback;
+}
 
 export function chatCommand(): Command {
   const cmd = new Command("chat")
@@ -17,6 +50,9 @@ export function chatCommand(): Command {
     .option("--temperature <n>", "Temperature (0-2)", parseFloat)
     .option("--reasoning-effort <level>", "Reasoning effort: low, medium, high (189 models support reasoning)")
     .option("--show-reasoning", "Show reasoning/thinking output (not all models return this)")
+    .option("--image <path>", "Send an image file (jpg, png, gif, webp)")
+    .option("--audio <path>", "Send an audio file (wav, mp3, m4a, flac)")
+    .option("--video <path>", "Send a video file (mp4, webm, mov) — requires Gemini or similar")
     .option("--json", "Output full response as JSON")
     .option("--quiet", "Output only the response text (for piping)")
     .option("--stream", "Stream the response (default for TTY)")
@@ -28,11 +64,54 @@ export function chatCommand(): Command {
       const format = getFormat(opts);
       const isTTY = process.stdout.isTTY;
 
+      // Build message content (handles multimodal)
+      const contentParts: ChatContentPart[] = [];
+
+      // Add image if provided
+      if (opts.image) {
+        const base64 = fileToBase64(opts.image);
+        const mime = getMimeType(opts.image, IMAGE_EXTS, "image/jpeg");
+        contentParts.push({
+          type: "image_url",
+          image_url: { url: `data:${mime};base64,${base64}` },
+        });
+      }
+
+      // Add audio if provided
+      if (opts.audio) {
+        const base64 = fileToBase64(opts.audio);
+        const ext = extname(opts.audio).toLowerCase().slice(1);
+        contentParts.push({
+          type: "input_audio",
+          input_audio: { data: base64, format: ext || "wav" },
+        });
+      }
+
+      // Add video if provided (base64 data URL)
+      if (opts.video) {
+        const base64 = fileToBase64(opts.video);
+        const mime = getMimeType(opts.video, VIDEO_EXTS, "video/mp4");
+        contentParts.push({
+          type: "video_url",
+          video_url: { url: `data:${mime};base64,${base64}` },
+        });
+      }
+
+      // Add text content
+      contentParts.push({ type: "text", text: message });
+
+      // Build messages array
       const messages: ChatMessage[] = [];
       if (opts.system) {
         messages.push({ role: "system", content: opts.system });
       }
-      messages.push({ role: "user", content: message });
+
+      // Use content parts if we have multimodal, otherwise plain text
+      if (contentParts.length > 1) {
+        messages.push({ role: "user", content: contentParts });
+      } else {
+        messages.push({ role: "user", content: message });
+      }
 
       const model = opts.model || getConfig().defaultModel || "openai/gpt-4o-mini";
       const useStream = opts.stream ?? (isTTY && !opts.json && !opts.quiet);
@@ -55,10 +134,19 @@ export function chatCommand(): Command {
         request.reasoning = { effort };
       }
 
+      // Log what we're sending
+      const attachments: string[] = [];
+      if (opts.image) attachments.push(`image: ${opts.image}`);
+      if (opts.audio) attachments.push(`audio: ${opts.audio}`);
+      if (opts.video) attachments.push(`video: ${opts.video}`);
+
       try {
         if (useStream) {
           // Streaming mode
-          const spinner = ora({ text: `Querying ${chalk.cyan(model)}...`, spinner: "dots" }).start();
+          const spinnerText = attachments.length > 0
+            ? `Querying ${chalk.cyan(model)} with ${attachments.join(", ")}...`
+            : `Querying ${chalk.cyan(model)}...`;
+          const spinner = ora({ text: spinnerText, spinner: "dots" }).start();
 
           const stream = await chatCompletionStream(apiKey, { ...request, stream: true });
 
@@ -90,10 +178,6 @@ export function chatCommand(): Command {
                 // Handle content output
                 if (delta?.content) {
                   fullText += delta.content;
-                  // If showing reasoning, add separator before content
-                  if (opts.showReasoning && reasoningText && !fullText.slice(0, -delta.content.length)) {
-                    process.stdout.write("\n" + chalk.bold("── Response ──") + "\n");
-                  }
                   process.stdout.write(delta.content);
                 }
 
@@ -119,7 +203,7 @@ export function chatCommand(): Command {
               model,
               provider,
               systemPrompt: opts.system,
-              prompt: message,
+              prompt: message + (attachments.length > 0 ? ` [${attachments.join(", ")}]` : ""),
               response: fullText,
               usage: {
                 promptTokens: usage.prompt_tokens,
@@ -135,16 +219,19 @@ export function chatCommand(): Command {
 
         } else {
           // Non-streaming mode
-          const spinner = ora({ text: `Querying ${chalk.cyan(model)}...`, spinner: "dots" }).start();
+          const spinnerText = attachments.length > 0
+            ? `Querying ${chalk.cyan(model)} with ${attachments.join(", ")}...`
+            : `Querying ${chalk.cyan(model)}...`;
+          const spinner = ora({ text: spinnerText, spinner: "dots" }).start();
 
           const response = await chatCompletion(apiKey, request);
 
           const latencyMs = Date.now() - startTime;
           spinner.stop();
 
-          const message = response.choices?.[0]?.message;
-          const content = message?.content ?? "";
-          const reasoning = (message as any)?.reasoning;
+          const respMessage = response.choices?.[0]?.message;
+          const content = respMessage?.content ?? "";
+          const reasoning = (respMessage as any)?.reasoning;
 
           // Log to history
           if (opts.log !== false && content) {
@@ -160,7 +247,7 @@ export function chatCommand(): Command {
               model,
               provider: response.provider,
               systemPrompt: opts.system,
-              prompt: messageParts.join(" "),
+              prompt: message + (attachments.length > 0 ? ` [${attachments.join(", ")}]` : ""),
               response: content,
               finishReason: response.choices?.[0]?.finish_reason,
               usage: {
@@ -200,6 +287,7 @@ export function chatCommand(): Command {
             ];
             if (response.provider) stats.push(`• ${response.provider}`);
             if (reasoning) stats.push(`• reasoning included`);
+            if (attachments.length > 0) stats.push(`• ${attachments.join(", ")}`);
             console.log(chalk.dim(`  ${stats.join(" ")}`));
           }
         }

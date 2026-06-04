@@ -23,6 +23,11 @@ or chat "Write a haiku" -m google/gemini-2.5-flash --max-tokens 100
 | `-s, --system <prompt>` | System prompt |
 | `--max-tokens <n>` | Cap response length |
 | `--temperature <n>` | Creativity (0-2, default varies by model) |
+| `--reasoning-effort <level>` | Reasoning effort: low, medium, high |
+| `--show-reasoning` | Show reasoning/thinking output |
+| `--image <path>` | Send an image file (jpg, png, gif, webp) |
+| `--audio <path>` | Send an audio file (wav, mp3, m4a, flac) |
+| `--video <path>` | Send a video file (mp4, webm, mov) |
 | `--json` | Full API response as JSON (includes usage, provider info) |
 | `--quiet` | Only the response text — for piping into other tools |
 | `--stream` / `--no-stream` | Stream output (default for TTY) vs wait for full response |
@@ -58,6 +63,23 @@ or history clear                   # Clear all history
 
 History includes: prompt, response, model, provider, token counts, cost estimate, latency.
 
+## Multimodal Inputs
+
+Send images, audio, and video to compatible models:
+
+```bash
+# Image analysis
+or chat "What's in this image?" --image photo.jpg -m google/gemini-2.5-flash
+
+# Audio transcription
+or chat "Transcribe this" --audio recording.wav -m google/gemini-2.5-flash
+
+# Video summarization
+or chat "Summarize this video" --video clip.mp4 -m google/gemini-2.5-flash
+```
+
+See `skills/or-multimodal.md` for full documentation.
+
 ## Important Notes
 
 - **Always specify a model with `-m`**. Without it, a default is used which may not be optimal.
@@ -65,3 +87,4 @@ History includes: prompt, response, model, provider, token counts, cost estimate
 - **Free models have rate limits.** If you get a 429, fall back to a paid model.
 - **`--quiet --no-stream`** is the most reliable pattern for agent pipelines.
 - **Cost estimates** in history are calculated from model pricing — actual costs may vary by provider.
+- **Multimodal support varies** — not all models accept images/audio/video. Check with `or show` first.
