@@ -9,6 +9,8 @@ import { cacheCommand } from "./commands/cache";
 import { historyCommand } from "./commands/history";
 import { endpointsCommand } from "./commands/endpoints";
 import { providersCommand } from "./commands/providers";
+import { creditsCommand } from "./commands/credits";
+import { rankingsCommand } from "./commands/rankings";
 
 const program = new Command();
 
@@ -27,5 +29,7 @@ program.addCommand(cacheCommand());
 program.addCommand(historyCommand());
 program.addCommand(endpointsCommand());
 program.addCommand(providersCommand());
+program.addCommand(creditsCommand());
+program.addCommand(rankingsCommand());
 
 program.parse();

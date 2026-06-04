@@ -41,10 +41,12 @@ or benchmarks --type llm --sort coding -n 10
 | `or models` | List, search, and filter 370+ models |
 | `or show <id>` | Detailed model info with price ranges |
 | `or compare <id> <id>` | Side-by-side model comparison |
-| `or chat <message>` | Send messages to any model |
+| `or chat <message>` | Send messages to any model (supports images, audio, video) |
 | `or endpoints <id>` | Per-provider uptime, latency, quantization |
 | `or providers` | List providers with datacenter locations |
 | `or benchmarks` | AA benchmark data (6 categories, 509+ models) |
+| `or rankings` | Daily token usage rankings for top models |
+| `or credits` | Show account credits and usage |
 | `or history` | View/search chat history |
 | `or cache` | Manage response cache |
 
