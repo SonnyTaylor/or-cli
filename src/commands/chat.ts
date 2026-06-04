@@ -291,7 +291,10 @@ export function chatCommand(): Command {
                 const b64 = parts[1] ?? "";
                 const imgBuf = Buffer.from(b64, "base64");
                 const savePath = resolve(opts.save);
-                mkdirSync(dirname(savePath), { recursive: true });
+                const dir = dirname(savePath);
+                if (!existsSync(dir)) {
+                  mkdirSync(dir, { recursive: true });
+                }
                 writeFileSync(savePath, imgBuf);
                 if (!opts.quiet) {
                   console.log(chalk.green(`✓ Image saved to ${savePath} (${(imgBuf.length / 1024).toFixed(0)}KB)`));
