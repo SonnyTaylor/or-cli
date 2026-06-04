@@ -18,9 +18,11 @@ import {
   isRerankModel,
   isTranscriptionModel,
   combinedPrice,
+  isPerImagePriced,
+  getPerImagePrice,
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks, fetchMediaBenchmarks } from "../lib/artificial-analysis";
-import { getFormat, outputTable, formatPriceStr, truncate, modalityEmoji } from "../lib/format";
+import { getFormat, outputTable, formatPriceStr, formatPerImagePrice, truncate, modalityEmoji, error } from "../lib/format";
 import type { ORModel, AAModel, GlobalOptions } from "../lib/types";
 
 interface FilterOptions extends GlobalOptions {
@@ -148,10 +150,14 @@ export function modelsCommand(): Command {
           : ["Model", "Modality", "Price from/M", "Context", "🔧", "🧠"];
 
         const rows = models.map((m) => {
+          const perImage = isPerImagePriced(m);
+          const priceDisplay = perImage
+            ? formatPerImagePrice(getPerImagePrice(m))
+            : formatPriceStr(combinedPrice(m));
           const base = [
             truncate(m.id, 45),
             modalityEmoji(getModelModality(m)) + " " + getModelModality(m),
-            formatPriceStr(combinedPrice(m)),
+            priceDisplay,
             formatContext(m.context_length),
             hasTools(m) ? "✓" : "",
           ];
@@ -205,7 +211,27 @@ function filterByType(models: ORModel[], type: string): ORModel[] {
 function sortModels(models: ORModel[], sort: string): ORModel[] {
   switch (sort) {
     case "price":
-      return [...models].sort((a, b) => combinedPrice(a) - combinedPrice(b));
+      return [...models].sort((a, b) => {
+        // For per-image models, compare by per-image price
+        const aPerImage = isPerImagePriced(a);
+        const bPerImage = isPerImagePriced(b);
+        
+        if (aPerImage && bPerImage) {
+          // Both per-image: compare by image price
+          const aPrice = getPerImagePrice(a) ?? 0;
+          const bPrice = getPerImagePrice(b) ?? 0;
+          return aPrice - bPrice;
+        } else if (aPerImage) {
+          // a is per-image, b is token-based: a comes after b (per-image is usually more expensive per request)
+          return 1;
+        } else if (bPerImage) {
+          // b is per-image, a is token-based: a comes before b
+          return -1;
+        }
+        
+        // Both token-based: compare by combined price
+        return combinedPrice(a) - combinedPrice(b);
+      });
     case "context":
       return [...models].sort((a, b) => b.context_length - a.context_length);
     case "created":

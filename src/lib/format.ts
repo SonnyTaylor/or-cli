@@ -62,6 +62,14 @@ export function formatPriceStr(pricePerMillion: number | undefined): string {
   return `$${pricePerMillion.toFixed(2)}`;
 }
 
+export function formatPerImagePrice(pricePerImageToken: number | null | undefined): string {
+  if (pricePerImageToken == null || pricePerImageToken === 0) return "free";
+  // Convert per-token to per-image (assuming ~1000 tokens per image)
+  const pricePerImage = pricePerImageToken * 1000;
+  if (pricePerImage < 0.01) return "<$0.01/img";
+  return `$${pricePerImage.toFixed(2)}/img`;
+}
+
 export function formatTps(tps: number | undefined): string {
   if (tps === undefined) return "—";
   if (tps < 1) return `${(tps * 1000).toFixed(0)}ms`;

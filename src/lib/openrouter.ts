@@ -4,6 +4,38 @@ import { getConfig } from "./config";
 
 const BASE = "https://openrouter.ai/api/v1";
 
+// Known image model prefixes that aren't in the main /models list
+// These use per-image/per-megapixel pricing and are only available via /models/{id}/endpoints
+const HIDDEN_IMAGE_MODEL_PREFIXES = [
+  "recraft/recraft-",
+  "x-ai/grok-imagine-",
+  "microsoft/mai-image-",
+  "sourceful/",
+  "black-forest-labs/flux-",
+  "klingai/",
+  "stability/",
+];
+
+// Specific known image model IDs
+const KNOWN_IMAGE_MODELS = [
+  "microsoft/mai-image-2.5",
+  "x-ai/grok-imagine-image-quality",
+  "x-ai/grok-imagine-image-pro",
+  "x-ai/grok-imagine-image",
+  "recraft/recraft-v4.1-pro-vector",
+  "recraft/recraft-v4.1-vector",
+  "recraft/recraft-v4.1-utility-pro",
+  "recraft/recraft-v4.1-utility",
+  "recraft/recraft-v4.1-pro",
+  "recraft/recraft-v4.1",
+  "recraft/recraft-v4-pro-vector",
+  "recraft/recraft-v4-vector",
+  "recraft/recraft-v4-pro",
+  "recraft/recraft-v4",
+  "recraft/recraft-v3",
+  "sourceful/riverflow-v2-fast-preview",
+];
+
 async function orFetch<T>(path: string, apiKey: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...options,
@@ -51,8 +83,67 @@ export async function fetchModels(apiKey: string, noCache = false, sort?: string
     }
   }
 
+  // Also fetch hidden image models (per-image/per-megapixel priced models)
+  const hiddenModels = await fetchHiddenImageModels(apiKey, seen);
+  models.push(...hiddenModels);
+
   if (!noCache) {
     setCache(cacheKey, {}, models, cacheTtl);
+  }
+
+  return models;
+}
+
+async function fetchHiddenImageModels(apiKey: string, existingIds: Set<string>): Promise<ORModel[]> {
+  const models: ORModel[] = [];
+
+  // Fetch known image models in parallel (batch of 5 at a time to avoid rate limits)
+  const idsToFetch = KNOWN_IMAGE_MODELS.filter(id => !existingIds.has(id));
+
+  for (let i = 0; i < idsToFetch.length; i += 5) {
+    const batch = idsToFetch.slice(i, i + 5);
+    const results = await Promise.all(
+      batch.map(async (id) => {
+        try {
+          const res = await fetch(`${BASE}/models/${id}/endpoints`, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          });
+          if (!res.ok) return null;
+          const data = await res.json() as any;
+          const endpoints = data.data?.endpoints ?? [];
+          if (endpoints.length === 0) return null;
+
+          // Construct ORModel from endpoint data
+          return {
+            id: data.data.id,
+            name: data.data.name,
+            description: data.data.description,
+            architecture: data.data.architecture ?? { modality: "text+image->image", tokenizer: "" },
+            context_length: endpoints[0]?.context_length ?? 0,
+            pricing: {
+              prompt: endpoints[0]?.pricing?.prompt ?? "0",
+              completion: endpoints[0]?.pricing?.completion ?? "0",
+              image: endpoints[0]?.pricing?.image_output ?? endpoints[0]?.pricing?.image,
+            },
+            top_provider: {
+              max_completion_tokens: endpoints[0]?.max_completion_tokens,
+              is_moderated: false,
+            },
+            supported_parameters: endpoints[0]?.supported_parameters ?? [],
+            created: data.data.created ?? 0,
+          } as ORModel;
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    for (const m of results) {
+      if (m && !existingIds.has(m.id)) {
+        existingIds.add(m.id);
+        models.push(m);
+      }
+    }
   }
 
   return models;
@@ -267,6 +358,28 @@ export function findORModelForAA(
 export function combinedPrice(model: ORModel): number {
   const input = parseFloat(model.pricing?.prompt ?? "0") * 1_000_000;
   const output = parseFloat(model.pricing?.completion ?? "0") * 1_000_000;
+  
+  // For models with per-image pricing and zero token pricing
+  const imagePrice = parseFloat(model.pricing?.image ?? "0");
+  if (imagePrice > 0 && input === 0 && output === 0) {
+    return imagePrice * 1_000_000; // Return per 1M image tokens
+  }
+  
   // Weighted 3:1 input:output
   return (input * 3 + output) / 4;
+}
+
+export function isPerImagePriced(model: ORModel): boolean {
+  const imagePrice = parseFloat(model.pricing?.image ?? "0");
+  const input = parseFloat(model.pricing?.prompt ?? "0");
+  const output = parseFloat(model.pricing?.completion ?? "0");
+  return imagePrice > 0 && input === 0 && output === 0;
+}
+
+export function getPerImagePrice(model: ORModel): number | null {
+  const imagePrice = parseFloat(model.pricing?.image ?? "0");
+  if (imagePrice > 0) {
+    return imagePrice; // Price per image token
+  }
+  return null;
 }
