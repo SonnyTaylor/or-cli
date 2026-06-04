@@ -91,8 +91,8 @@ Context7-cli skill structure for reference: `C:\Users\Sonny Taylor\.agents\skill
 
 ## API Keys (for testing)
 
-- OpenRouter: `REMOVED`
-- Artificial Analysis: `aa_keEYLmoRXClDTNSZepwSfoSrgMSNjDRt`
+- OpenRouter: Set via `or auth` or `OPENROUTER_API_KEY` env var
+- Artificial Analysis: Set via `or auth --aa-key` or `ARTIFICIAL_ANALYSIS_API_KEY` env var
 
 ## Tech Stack
 
