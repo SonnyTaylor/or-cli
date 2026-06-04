@@ -70,3 +70,10 @@ export function getAAKey(): string | undefined {
   }
   return getConfig().artificialAnalysisApiKey;
 }
+
+export function getORKey(): string | undefined {
+  if (process.env.OPENROUTER_API_KEY) {
+    return process.env.OPENROUTER_API_KEY;
+  }
+  return getConfig().openrouterApiKey;
+}

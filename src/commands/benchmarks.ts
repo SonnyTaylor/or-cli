@@ -1,10 +1,11 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
-import { getAAKey } from "../lib/config";
+import { getAAKey, getORKey } from "../lib/config";
 import { fetchLLMBenchmarks, fetchMediaBenchmarks } from "../lib/artificial-analysis";
+import { fetchModels, findORModelForAA, isImageGenModel } from "../lib/openrouter";
 import { getFormat, outputTable, formatPriceStr, formatTps, truncate } from "../lib/format";
-import type { AAMediaEndpoint, GlobalOptions, AAModel } from "../lib/types";
+import type { AAMediaEndpoint, GlobalOptions, AAModel, ORModel } from "../lib/types";
 
 export function benchmarksCommand(): Command {
   const cmd = new Command("benchmarks")
@@ -17,12 +18,14 @@ export function benchmarksCommand(): Command {
     .option("--md", "Output as Markdown table")
     .option("--no-cache", "Bypass cache, fetch fresh data")
     .option("--list-types", "List available benchmark categories")
+    .option("--or", "Show OpenRouter model IDs (cross-reference with available models)")
     .action(async (opts: GlobalOptions & {
       type?: string;
       sort?: string;
       limit?: number;
       detailed?: boolean;
       listTypes?: boolean;
+      or?: boolean;
     }) => {
       if (opts.listTypes) {
         console.log(chalk.bold("Available benchmark categories:\n"));
@@ -47,15 +50,37 @@ export function benchmarksCommand(): Command {
         process.exit(1);
       }
 
+      // If --or flag, we need OpenRouter key too
+      let orModels: ORModel[] | null = null;
+      if (opts.or) {
+        const orKey = getORKey();
+        if (!orKey) {
+          console.error(
+            chalk.red("Error: No OpenRouter API key found.\n") +
+            "Run `or auth --or-key <key>` to set your key."
+          );
+          process.exit(1);
+        }
+        const spinner2 = ora("Fetching OpenRouter models...").start();
+        try {
+          orModels = await fetchModels(orKey, opts.noCache);
+          spinner2.stop();
+        } catch (err) {
+          spinner2.fail("Failed to fetch OpenRouter models");
+          console.error(chalk.red(String(err)));
+          process.exit(1);
+        }
+      }
+
       const format = getFormat(opts);
       const type = opts.type ?? "llm";
       const spinner = ora(`Fetching ${type} benchmarks...`).start();
 
       try {
         if (type === "llm") {
-          await showLLMBenchmarks(aaKey, opts, format, spinner);
+          await showLLMBenchmarks(aaKey, opts, format, spinner, orModels);
         } else {
-          await showMediaBenchmarks(aaKey, type as AAMediaEndpoint, opts, format, spinner);
+          await showMediaBenchmarks(aaKey, type as AAMediaEndpoint, opts, format, spinner, orModels);
         }
       } catch (err) {
         spinner.fail("Failed to fetch benchmarks");
@@ -71,7 +96,8 @@ async function showLLMBenchmarks(
   aaKey: string,
   opts: { sort?: string; limit?: number; noCache?: boolean; detailed?: boolean },
   format: "table" | "json" | "md",
-  spinner: ReturnType<typeof ora>
+  spinner: ReturnType<typeof ora>,
+  orModels: ORModel[] | null
 ) {
   const models = await fetchLLMBenchmarks(aaKey, opts.noCache);
   spinner.stop();
@@ -170,9 +196,10 @@ async function showLLMBenchmarks(
 async function showMediaBenchmarks(
   aaKey: string,
   endpoint: AAMediaEndpoint,
-  opts: { sort?: string; limit?: number; noCache?: boolean },
+  opts: { sort?: string; limit?: number; noCache?: boolean; or?: boolean },
   format: "table" | "json" | "md",
-  spinner: ReturnType<typeof ora>
+  spinner: ReturnType<typeof ora>,
+  orModels: ORModel[] | null
 ) {
   const models = await fetchMediaBenchmarks(aaKey, endpoint, opts.noCache);
   spinner.stop();
@@ -192,26 +219,54 @@ async function showMediaBenchmarks(
 
   const limited = opts.limit ? sorted.slice(0, opts.limit) : sorted;
 
+  // Resolve OpenRouter IDs if --or flag
+  const modality = endpoint.includes("image") ? "image" : undefined;
+  const orIds = orModels
+    ? limited.map((m) => findORModelForAA(m.name, m.model_creator.name, orModels, modality as "image" | undefined))
+    : null;
+
   if (format === "json") {
-    console.log(JSON.stringify(limited, null, 2));
+    if (orIds) {
+      // Attach OR IDs to JSON output
+      const enriched = limited.map((m, i) => ({ ...m, openrouter_id: orIds[i] }));
+      console.log(JSON.stringify(enriched, null, 2));
+    } else {
+      console.log(JSON.stringify(limited, null, 2));
+    }
     return;
   }
 
-  const headers = ["Model", "Creator", "ELO", "Rank", "95% CI", "Appearances", "Released"];
-  const rows = limited.map((m) => [
-    truncate(m.name, 30),
-    m.model_creator.name,
-    String(m.elo),
-    String(m.rank),
-    m.ci95 ?? "—",
-    m.appearances?.toLocaleString() ?? "—",
-    m.release_date ?? "—",
-  ]);
+  const headers = orIds
+    ? ["Model", "Creator", "ELO", "Rank", "OpenRouter ID"]
+    : ["Model", "Creator", "ELO", "Rank", "95% CI", "Appearances", "Released"];
+
+  const rows = orIds
+    ? limited.map((m, i) => [
+        truncate(m.name, 30),
+        m.model_creator.name,
+        String(m.elo),
+        String(m.rank),
+        orIds[i] ? chalk.green(orIds[i]) : chalk.dim("—"),
+      ])
+    : limited.map((m) => [
+        truncate(m.name, 30),
+        m.model_creator.name,
+        String(m.elo),
+        String(m.rank),
+        m.ci95 ?? "—",
+        m.appearances?.toLocaleString() ?? "—",
+        m.release_date ?? "—",
+      ]);
 
   outputTable(headers, rows, format);
 
   if (format === "table") {
     console.log(chalk.dim(`\n  ${limited.length} models shown`));
+    if (orIds) {
+      const matched = orIds.filter(Boolean).length;
+      console.log(chalk.dim(`  ${matched} available on OpenRouter (green IDs)`));
+      console.log(chalk.dim("  Use `or models -t image` to list all available image models"));
+    }
     console.log(chalk.dim("  Data: Artificial Analysis (artificialanalysis.ai)"));
   }
 }
