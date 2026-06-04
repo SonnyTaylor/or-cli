@@ -4,38 +4,6 @@ import { getConfig } from "./config";
 
 const BASE = "https://openrouter.ai/api/v1";
 
-// Known image model prefixes that aren't in the main /models list
-// These use per-image/per-megapixel pricing and are only available via /models/{id}/endpoints
-const HIDDEN_IMAGE_MODEL_PREFIXES = [
-  "recraft/recraft-",
-  "x-ai/grok-imagine-",
-  "microsoft/mai-image-",
-  "sourceful/",
-  "black-forest-labs/flux-",
-  "klingai/",
-  "stability/",
-];
-
-// Specific known image model IDs
-const KNOWN_IMAGE_MODELS = [
-  "microsoft/mai-image-2.5",
-  "x-ai/grok-imagine-image-quality",
-  "x-ai/grok-imagine-image-pro",
-  "x-ai/grok-imagine-image",
-  "recraft/recraft-v4.1-pro-vector",
-  "recraft/recraft-v4.1-vector",
-  "recraft/recraft-v4.1-utility-pro",
-  "recraft/recraft-v4.1-utility",
-  "recraft/recraft-v4.1-pro",
-  "recraft/recraft-v4.1",
-  "recraft/recraft-v4-pro-vector",
-  "recraft/recraft-v4-vector",
-  "recraft/recraft-v4-pro",
-  "recraft/recraft-v4",
-  "recraft/recraft-v3",
-  "sourceful/riverflow-v2-fast-preview",
-];
-
 async function orFetch<T>(path: string, apiKey: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...options,
@@ -65,85 +33,73 @@ export async function fetchModels(apiKey: string, noCache = false, sort?: string
     if (cached) return cached;
   }
 
-  // Fetch from both endpoints in parallel
+  // Fetch models in parallel: main list, embeddings, and image models
   const mainPath = sort ? `/models?sort=${sort}` : '/models';
-  const [mainRes, embeddingsRes] = await Promise.all([
+  const [mainRes, embeddingsRes, imageRes] = await Promise.all([
     orFetch<{ data: ORModel[] }>(mainPath, apiKey),
     orFetch<{ data: ORModel[] }>("/embeddings/models", apiKey).catch(() => ({ data: [] })),
+    orFetch<{ data: ORModel[] }>("/models?output_modalities=image", apiKey).catch(() => ({ data: [] })),
   ]);
 
   // Merge and deduplicate by id
   const seen = new Set<string>();
   const models: ORModel[] = [];
 
-  for (const m of [...mainRes.data, ...embeddingsRes.data]) {
+  for (const m of [...mainRes.data, ...embeddingsRes.data, ...imageRes.data]) {
     if (!seen.has(m.id)) {
       seen.add(m.id);
       models.push(m);
     }
   }
 
-  // Also fetch hidden image models (per-image/per-megapixel priced models)
-  const hiddenModels = await fetchHiddenImageModels(apiKey, seen);
-  models.push(...hiddenModels);
+  // For image models with zero token pricing, fetch endpoints for per-image pricing
+  const zeroPricedImage = models.filter(m => {
+    const mod = m.architecture?.modality || "";
+    const output = mod.split("->")[1] || "";
+    return output.includes("image") && 
+           parseFloat(m.pricing?.prompt || "0") === 0 && 
+           parseFloat(m.pricing?.completion || "0") === 0 &&
+           !m.pricing?.image; // Don't re-fetch if already has image pricing
+  });
+
+  if (zeroPricedImage.length > 0) {
+    // Fetch endpoints in batches of 5
+    for (let i = 0; i < zeroPricedImage.length; i += 5) {
+      const batch = zeroPricedImage.slice(i, i + 5);
+      const results = await Promise.all(
+        batch.map(async (m) => {
+          try {
+            const res = await fetch(`${BASE}/models/${m.id}/endpoints`, {
+              headers: { Authorization: `Bearer ${apiKey}` },
+            });
+            if (!res.ok) return null;
+            const data = await res.json() as any;
+            const endpoints = data.data?.endpoints ?? [];
+            if (endpoints.length === 0) return null;
+            return { id: m.id, pricing: endpoints[0]?.pricing };
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      // Update models with endpoint pricing
+      for (const result of results) {
+        if (result?.pricing) {
+          const model = models.find(m => m.id === result.id);
+          if (model) {
+            model.pricing = {
+              ...model.pricing,
+              image: result.pricing.image_output || result.pricing.image,
+            };
+          }
+        }
+      }
+    }
+  }
 
   if (!noCache) {
     setCache(cacheKey, {}, models, cacheTtl);
-  }
-
-  return models;
-}
-
-async function fetchHiddenImageModels(apiKey: string, existingIds: Set<string>): Promise<ORModel[]> {
-  const models: ORModel[] = [];
-
-  // Fetch known image models in parallel (batch of 5 at a time to avoid rate limits)
-  const idsToFetch = KNOWN_IMAGE_MODELS.filter(id => !existingIds.has(id));
-
-  for (let i = 0; i < idsToFetch.length; i += 5) {
-    const batch = idsToFetch.slice(i, i + 5);
-    const results = await Promise.all(
-      batch.map(async (id) => {
-        try {
-          const res = await fetch(`${BASE}/models/${id}/endpoints`, {
-            headers: { Authorization: `Bearer ${apiKey}` },
-          });
-          if (!res.ok) return null;
-          const data = await res.json() as any;
-          const endpoints = data.data?.endpoints ?? [];
-          if (endpoints.length === 0) return null;
-
-          // Construct ORModel from endpoint data
-          return {
-            id: data.data.id,
-            name: data.data.name,
-            description: data.data.description,
-            architecture: data.data.architecture ?? { modality: "text+image->image", tokenizer: "" },
-            context_length: endpoints[0]?.context_length ?? 0,
-            pricing: {
-              prompt: endpoints[0]?.pricing?.prompt ?? "0",
-              completion: endpoints[0]?.pricing?.completion ?? "0",
-              image: endpoints[0]?.pricing?.image_output ?? endpoints[0]?.pricing?.image,
-            },
-            top_provider: {
-              max_completion_tokens: endpoints[0]?.max_completion_tokens,
-              is_moderated: false,
-            },
-            supported_parameters: endpoints[0]?.supported_parameters ?? [],
-            created: data.data.created ?? 0,
-          } as ORModel;
-        } catch {
-          return null;
-        }
-      })
-    );
-
-    for (const m of results) {
-      if (m && !existingIds.has(m.id)) {
-        existingIds.add(m.id);
-        models.push(m);
-      }
-    }
   }
 
   return models;

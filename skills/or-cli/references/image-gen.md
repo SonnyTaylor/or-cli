@@ -9,6 +9,17 @@
 | Understand/analyze images | `or models --vision` | Image in, text out |
 | Extract text (OCR) | `or models --vision` | Any vision model |
 
+## Pricing Types
+
+Image models have two pricing types:
+
+| Type | Display | Example | How it works |
+|------|---------|---------|---------------|
+| Token-based | `$2.38` | GPT-5 Image Mini | Charged per 1M tokens (input + output) |
+| Per-image | `$0.04/img` | Recraft V4.1 | Fixed price per generated image |
+
+Per-image models (Recraft, xAI Grok, Microsoft MAI, Sourceful) are often cheaper for single images but don't support token-based cost optimization.
+
 ```bash
 # Image generation models
 or models -t image
