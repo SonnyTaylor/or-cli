@@ -1,11 +1,11 @@
 ---
 name: or-chat
-description: Send messages to AI models via OpenRouter using the `or` CLI. Use when the user wants to ask a model a question, get a completion, or test a model's response.
+description: Send messages to any AI model on OpenRouter. Use when the user wants to ask a model a question, get a completion, talk to a specific model, get help from a smarter model, test a model's response, or have a model analyze/summarize/generate content. Also use for multimodal tasks: analyzing images, transcribing audio, summarizing video, extracting text from screenshots, or generating embeddings. Can target any model by ID.
 ---
 
 # Chat with `or`
 
-Use `or chat` to send single-shot messages to any model on OpenRouter.
+Use `or chat` to send single-shot messages to any model on OpenRouter. Supports text, images, audio, and video inputs.
 
 ## Basic Usage
 
@@ -28,10 +28,29 @@ or chat "Write a haiku" -m google/gemini-2.5-flash --max-tokens 100
 | `--image <path>` | Send an image file (jpg, png, gif, webp) |
 | `--audio <path>` | Send an audio file (wav, mp3, m4a, flac) |
 | `--video <path>` | Send a video file (mp4, webm, mov) |
-| `--json` | Full API response as JSON (includes usage, provider info) |
-| `--quiet` | Only the response text — for piping into other tools |
-| `--stream` / `--no-stream` | Stream output (default for TTY) vs wait for full response |
+| `--json` | Full API response as JSON |
+| `--quiet` | Only the response text (for piping) |
+| `--stream` / `--no-stream` | Stream vs wait for full response |
 | `--no-log` | Don't save to history |
+
+## Multimodal Inputs
+
+```bash
+# Image analysis
+or chat "What's in this image?" --image photo.jpg -m google/gemini-2.5-flash
+
+# Audio transcription
+or chat "Transcribe this audio" --audio recording.wav -m google/gemini-2.5-flash
+
+# Video summarization
+or chat "Summarize this video" --video clip.mp4 -m google/gemini-2.5-flash
+```
+
+## Reasoning
+
+```bash
+or chat "Solve this step by step" -m deepseek/deepseek-v4-flash --reasoning-effort high --show-reasoning
+```
 
 ## Agent-Friendly Patterns
 
@@ -44,41 +63,16 @@ or chat "Generate a README" --quiet --no-stream > README.md
 
 # Get full JSON response with token counts
 or chat "List 3 colors" --json --no-stream
-
-# Model selection workflow — always discover first
-or models --tools --sort price -n 1 --json
 ```
 
 ## Chat History
 
-All chats are automatically logged. Manage history with:
-
 ```bash
 or history list                    # Recent chats
-or history show <id>               # Full details of a chat
+or history show <id>               # Full details
 or history search "query"          # Search prompts/responses
-or history stats                   # Usage statistics (tokens, cost, models used)
-or history clear                   # Clear all history
+or history stats                   # Usage statistics
 ```
-
-History includes: prompt, response, model, provider, token counts, cost estimate, latency.
-
-## Multimodal Inputs
-
-Send images, audio, and video to compatible models:
-
-```bash
-# Image analysis
-or chat "What's in this image?" --image photo.jpg -m google/gemini-2.5-flash
-
-# Audio transcription
-or chat "Transcribe this" --audio recording.wav -m google/gemini-2.5-flash
-
-# Video summarization
-or chat "Summarize this video" --video clip.mp4 -m google/gemini-2.5-flash
-```
-
-See `skills/or-multimodal.md` for full documentation.
 
 ## Important Notes
 
@@ -86,5 +80,3 @@ See `skills/or-multimodal.md` for full documentation.
 - **Find the right model first** — use `or models` to search, then pass the full model ID.
 - **Free models have rate limits.** If you get a 429, fall back to a paid model.
 - **`--quiet --no-stream`** is the most reliable pattern for agent pipelines.
-- **Cost estimates** in history are calculated from model pricing — actual costs may vary by provider.
-- **Multimodal support varies** — not all models accept images/audio/video. Check with `or show` first.

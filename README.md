@@ -5,12 +5,22 @@ A CLI for [OpenRouter](https://openrouter.ai) — search models, send messages, 
 ## Installation
 
 ```bash
+# Clone the repo
+git clone https://github.com/SonnyTaylor/or-cli.git
+cd or-cli
+
+# Install dependencies
+bun install
+
+# Install globally (makes `or` command available everywhere)
 bun install -g .
 ```
 
-Or run directly:
+After global install, run `or` from anywhere:
+
 ```bash
-bun run src/cli.ts <command>
+or --help
+or models --tools --sort price -n 5
 ```
 
 ## Quick Start
@@ -50,6 +60,27 @@ or benchmarks --type llm --sort coding -n 10
 | `or history` | View/search chat history |
 | `or cache` | Manage response cache |
 
+## Skills for AI Agents
+
+Install companion skills for your coding agent:
+
+```bash
+# From the project root
+npx skills add . -g -y
+```
+
+This installs 5 skills to `~/.agents/skills/` and symlinks them to your agent's skills directory:
+
+| Skill | When it activates |
+|-------|-------------------|
+| `or-models` | Finding, comparing, filtering models |
+| `or-chat` | Sending messages, getting completions |
+| `or-multimodal` | Analyzing images, transcribing audio, summarizing video |
+| `or-benchmarks` | Querying quality benchmarks, ELO ratings |
+| `or-image-gen` | Image generation, editing, and understanding |
+
+**No hardcoded model names** — everything is live-queried.
+
 ## Model Filtering
 
 ```bash
@@ -76,6 +107,29 @@ or models --expiring        # Models going away soon
 or models --tilde           # Include ~ prefix "latest" aliases
 ```
 
+## Multimodal Inputs
+
+Send images, audio, and video to compatible models:
+
+```bash
+# Image analysis
+or chat "What's in this image?" --image photo.jpg -m google/gemini-2.5-flash
+
+# Audio transcription
+or chat "Transcribe this" --audio recording.wav -m google/gemini-2.5-flash
+
+# Video summarization
+or chat "Summarize this video" --video clip.mp4 -m google/gemini-2.5-flash
+```
+
+## Reasoning
+
+Control reasoning effort and view thinking output:
+
+```bash
+or chat "Solve this" -m deepseek/deepseek-v4-flash --reasoning-effort high --show-reasoning
+```
+
 ## Benchmarks
 
 Powered by [Artificial Analysis](https://artificialanalysis.ai):
@@ -91,24 +145,6 @@ or benchmarks --type image-editing
 or benchmarks --type text-to-speech
 or benchmarks --type text-to-video
 or benchmarks --type image-to-video
-
-# Sort options: score, coding, intelligence, math, speed, ttft, price
-or benchmarks --sort speed -n 5
-```
-
-## Reasoning
-
-Control reasoning effort and view thinking output:
-
-```bash
-# Set reasoning effort (low, medium, high)
-or chat "Solve this step by step" -m deepseek/deepseek-v4-flash --reasoning-effort high
-
-# Show reasoning/thinking output
-or chat "What is 15 * 23?" -m deepseek/deepseek-v4-flash --reasoning-effort high --show-reasoning
-
-# System prompts
-or chat "Explain monads" -s "You are a senior Haskell developer. Be concise."
 ```
 
 ## Agent-Friendly Features
@@ -120,46 +156,6 @@ or chat "Explain monads" -s "You are a senior Haskell developer. Be concise."
 - `--no-log` — Don't save to history
 - `--no-cache` — Bypass cache, fetch fresh data
 - Deterministic exit codes
-
-## Provider Details
-
-```bash
-# See all providers for a model with uptime/latency
-or endpoints deepseek/deepseek-v4-flash --sort uptime
-
-# Filter by reliability
-or endpoints deepseek/deepseek-v4-flash --min-uptime 99 --sort latency
-
-# Filter by performance
-or endpoints deepseek/deepseek-v4-flash --max-latency 1000 --min-throughput 50
-
-# Provider datacenter info
-or providers --region US
-or providers --region EU
-```
-
-## History
-
-All chats are automatically logged:
-
-```bash
-or history list                    # Recent chats
-or history show <id>               # Full details
-or history search "query"          # Search prompts/responses
-or history stats                   # Usage statistics
-or history clear                   # Clear history
-```
-
-## Caching
-
-- OpenRouter models: 6h TTL (configurable)
-- AA benchmarks: 24h TTL (respects 1000/day rate limit)
-- Per-endpoint caching by query parameters
-
-```bash
-or cache --stats    # Show cache statistics
-or cache --clear    # Clear all cached data
-```
 
 ## API Keys
 
@@ -179,20 +175,6 @@ or auth --aa-key aa_...
 export OPENROUTER_API_KEY=sk-or-v1-...
 export ARTIFICIAL_ANALYSIS_API_KEY=aa_...
 ```
-
-## Skills for AI Agents
-
-Install the companion skills files for your coding agent:
-
-```
-skills/
-├── or-models.md        # Model discovery
-├── or-chat.md          # Chat + history
-├── or-image-gen.md     # Image generation
-└── or-benchmarks.md    # Benchmark queries
-```
-
-No hardcoded model names — everything is live-queried.
 
 ## Tech Stack
 
