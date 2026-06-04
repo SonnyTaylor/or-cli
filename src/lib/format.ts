@@ -119,3 +119,48 @@ export function warn(msg: string): void {
 export function info(msg: string): void {
   console.log(chalk.blue("ℹ") + " " + msg);
 }
+
+export function formatCtx(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return String(n);
+}
+
+export function formatCtxLong(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M tokens`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K tokens`;
+  return `${n} tokens`;
+}
+
+/**
+ * Estimate cost for a given model based on typical token usage.
+ * Returns { input, output, total } in dollars.
+ */
+export function estimateCost(
+  inputPricePerM: number,
+  outputPricePerM: number,
+  inputTokens: number,
+  outputTokens: number
+): { input: number; output: number; total: number } {
+  const input = (inputPricePerM / 1_000_000) * inputTokens;
+  const output = (outputPricePerM / 1_000_000) * outputTokens;
+  return { input, output, total: input + output };
+}
+
+export function formatDollars(cents: number): string {
+  if (cents < 0.001) return "$0.00";
+  if (cents < 0.01) return `$${cents.toFixed(4)}`;
+  return `$${cents.toFixed(2)}`;
+}
+
+/** Warn if --quiet is used on a command that doesn't support it. */
+export function guardQuiet(opts: { quiet?: boolean }): boolean {
+  if (opts.quiet) {
+    console.error(
+      chalk.yellow("⚠ --quiet is only supported on `or chat`. ") +
+      chalk.dim("Use --json for machine-readable output on other commands.")
+    );
+    return false;
+  }
+  return true;
+}

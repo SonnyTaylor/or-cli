@@ -35,7 +35,8 @@ or compare id1 id2 id3             # Side-by-side
 | `--param <param...>` | Filter by supported parameter (e.g. `tools`, `reasoning`, `response_format`, `structured_outputs`) |
 | `-s, --sort <field>` | Sort by: `price`, `context`, `name`, `created`, `usage`, `rank` |
 | `-n, --limit <n>` | Max results |
-| `--benchmarks` | Include Artificial Analysis benchmark scores |
+| `--benchmarks` | Include Artificial Analysis benchmark scores (requires AA API key) |
+| `--new` | Only models added in the last 30 days |
 | `--expiring` | Only models with an expiration date (going away soon) |
 | `--tilde` | Include `~` prefix 'latest' alias models |
 
@@ -59,6 +60,17 @@ Use `-t` to filter by what you need:
 ```bash
 or models --json                   # Machine-readable JSON
 or models --md                     # Markdown table
+or models                          # Styled terminal table (default)
+```
+
+## Sorting
+
+```bash
+or models -s price                 # Cheapest first (default: name)
+or models -s context               # Largest context first
+or models -s created               # Newest first
+or models -s usage                 # Most used (from API)
+or models -s rank                  # Best ranked (from API)
 ```
 
 ## Provider-Level Details
@@ -74,6 +86,46 @@ or providers
 or providers --region US
 ```
 
+## Comparing Models
+
+```bash
+or compare deepseek/deepseek-v4-pro xiaomi/mimo-v2.5-pro       # Side-by-side
+or compare model1 model2 --benchmarks                           # With AA scores
+or compare model1 model2 --cost-estimate                        # With cost per session
+or compare model1 model2 --benchmarks --cost-estimate           # Full comparison
+```
+
+The `--cost-estimate` flag shows estimated cost for a typical coding session (100K input / 50K output) and a larger session (500K input / 100K output).
+
+## Free Models
+
+```bash
+or models -f                        # All free models
+or models -f -t text                # Free text models
+or models "coding" -f --tools       # Free coding models with tools
+```
+
+Free models have aggressive rate limits. Be prepared to fall back to a paid model.
+
+## Recently Added Models
+
+```bash
+or models --new                     # Models added in last 30 days
+or models --new -t text             # New text models
+or models --new -s created          # Newest first
+```
+
+## Model Usage / Popularity
+
+```bash
+or rankings                         # Daily token usage for top models
+or rankings --model deepseek        # Filter by model name
+or rankings --date 2025-01-15       # Specific date
+or rankings -n 50                   # Top 50 models
+```
+
+The `rankings` command shows real usage data from OpenRouter — how many tokens each model consumed per day. This is the best proxy for "user sentiment" / popularity.
+
 ## Important Notes
 
 - **Free models may have aggressive rate limits.** Always be prepared to fall back to a paid model.
@@ -81,3 +133,4 @@ or providers --region US
 - **Prices shown are "from" prices** — the cheapest provider. Use `or show` for price ranges.
 - **Some models aren't in the main list** (image gen, video, rerank, transcription). Use `or show <id>` to find them.
 - **`~` prefix models** (e.g. `~anthropic/claude-sonnet-latest`) are aliases that auto-resolve to the latest version.
+- **`--quiet` is only supported on `or chat`** — use `--json` on other commands for piping.

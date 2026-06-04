@@ -32,6 +32,8 @@ or benchmarks --type llm --sort coding -n 10     # Best coders
 or benchmarks --type llm --sort speed -n 10       # Fastest
 or benchmarks --type llm --sort price -n 10       # Best value
 or benchmarks --type llm --detailed -n 5          # All 15 columns
+or benchmarks --type llm --json                   # Machine-readable JSON
+or benchmarks --type llm --md                     # Markdown table
 ```
 
 ### 15 LLM Evaluations
@@ -68,8 +70,17 @@ or benchmarks --type llm --or -n 10             # LLMs with OR IDs
 
 This adds an "OpenRouter ID" column showing the actual model ID to use with `or chat -m <id>`. Models not available on OpenRouter show `—`.
 
+## Output Formats
+
+```bash
+or benchmarks --type llm --json    # JSON output (for piping into jq)
+or benchmarks --type llm --md      # Markdown table
+or benchmarks --type llm           # Styled terminal table
+```
+
 ## Notes
 
 - ELO ratings are category-relative (1200 in image ≠ 1200 in video)
 - Speed varies by provider
 - Use `or models --benchmarks` to inline AA scores in model listings
+- `--quiet` is NOT supported on benchmarks — use `--json` for piping

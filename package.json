@@ -1,6 +1,6 @@
 {
   "name": "or-cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "CLI for OpenRouter — search models, send messages, view benchmarks",
   "type": "module",
   "bin": {

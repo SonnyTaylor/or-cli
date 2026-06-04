@@ -112,17 +112,20 @@ export async function fetchModel(apiKey: string, modelId: string): Promise<ORMod
 
 export async function chatCompletion(
   apiKey: string,
-  request: ChatRequest
+  request: ChatRequest,
+  extraHeaders?: Record<string, string>
 ): Promise<ChatResponse> {
   return orFetch<ChatResponse>("/chat/completions", apiKey, {
     method: "POST",
     body: JSON.stringify({ ...request, stream: false }),
+    headers: extraHeaders,
   });
 }
 
 export async function chatCompletionStream(
   apiKey: string,
-  request: ChatRequest
+  request: ChatRequest,
+  extraHeaders?: Record<string, string>
 ): Promise<ReadableStream<Uint8Array>> {
   const res = await fetch(`${BASE}/chat/completions`, {
     method: "POST",
@@ -131,6 +134,7 @@ export async function chatCompletionStream(
       "Content-Type": "application/json",
       "HTTP-Referer": "https://github.com/or-cli",
       "X-Title": "or-cli",
+      ...extraHeaders,
     },
     body: JSON.stringify({ ...request, stream: true }),
   });

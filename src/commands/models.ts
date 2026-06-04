@@ -22,7 +22,7 @@ import {
   getPerImagePrice,
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks, fetchMediaBenchmarks } from "../lib/artificial-analysis";
-import { getFormat, outputTable, formatPriceStr, formatPerImagePrice, truncate, modalityEmoji, error } from "../lib/format";
+import { getFormat, outputTable, formatPriceStr, formatPerImagePrice, truncate, modalityEmoji, formatCtx, error } from "../lib/format";
 import type { ORModel, AAModel, GlobalOptions } from "../lib/types";
 
 interface FilterOptions extends GlobalOptions {
@@ -166,7 +166,7 @@ export function modelsCommand(): Command {
             truncate(m.id, 45),
             modalityEmoji(getModelModality(m)) + " " + getModelModality(m),
             priceDisplay,
-            formatContext(m.context_length),
+            formatCtx(m.context_length),
             hasTools(m) ? "✓" : "",
           ];
 
@@ -250,8 +250,4 @@ function sortModels(models: ORModel[], sort: string): ORModel[] {
   }
 }
 
-function formatContext(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
-}
+

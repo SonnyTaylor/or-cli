@@ -2,7 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import { requireOpenRouterKey } from "../lib/config";
-import { getFormat, outputTable, formatPriceStr, truncate, formatPercent } from "../lib/format";
+import { getFormat, outputTable, formatPriceStr, truncate, formatPercent, formatCtx } from "../lib/format";
 import type { GlobalOptions } from "../lib/types";
 
 interface Endpoint {
@@ -225,8 +225,4 @@ function sortEndpoints(endpoints: Endpoint[], sort: string): Endpoint[] {
   }
 }
 
-function formatCtx(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
-}
+

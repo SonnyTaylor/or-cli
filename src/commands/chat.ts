@@ -7,6 +7,13 @@ import { requireOpenRouterKey, getConfig, getDefaultModel } from "../lib/config"
 import { chatCompletion, chatCompletionStream, fetchModels, combinedPrice } from "../lib/openrouter";
 import { getFormat, error } from "../lib/format";
 import { appendHistory, generateId } from "../lib/history";
+import {
+  createConversation,
+  appendConversation,
+  loadConversation,
+  getLastConversationId,
+  toMessages,
+} from "../lib/conversations";
 import type { ChatMessage, ChatContentPart } from "../lib/types";
 
 // MIME type mappings
@@ -23,6 +30,10 @@ const AUDIO_EXTS: Record<string, string> = {
 const VIDEO_EXTS: Record<string, string> = {
   ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
   ".avi": "video/x-msvideo", ".mkv": "video/x-matroska",
+};
+
+const PDF_EXTS: Record<string, string> = {
+  ".pdf": "application/pdf",
 };
 
 function fileToBase64(filePath: string): string {
@@ -50,15 +61,29 @@ export function chatCommand(): Command {
     .option("--temperature <n>", "Temperature (0-2)", parseFloat)
     .option("--reasoning-effort <level>", "Reasoning effort: low, medium, high (189 models support reasoning)")
     .option("--show-reasoning", "Show reasoning/thinking output (not all models return this)")
-    .option("--image <path>", "Send an image file (jpg, png, gif, webp)")
+    .option("--image <paths...>", "Send image file(s) (jpg, png, gif, webp) — can be repeated")
     .option("--audio <path>", "Send an audio file (wav, mp3, m4a, flac)")
     .option("--video <path>", "Send a video file (mp4, webm, mov) — requires Gemini or similar")
+    .option("--pdf <path>", "Send a PDF file (local file or URL)")
+    .option("--pdf-engine <engine>", "PDF processing engine: native, cloudflare-ai, mistral-ocr")
+    .option("--web-search", "Enable web search server tool (model can search the web)")
+    .option("--web-search-engine <engine>", "Search engine: auto, exa, firecrawl, parallel")
+    .option("--web-search-max <n>", "Max results per web search", parseInt)
+    .option("--web-fetch", "Enable web fetch server tool (model can fetch URLs)")
+    .option("--datetime", "Enable datetime server tool (model gets current date/time)")
+    .option("--exacto", "Use Exacto variant for quality-first provider routing")
+    .option("--server-cache", "Enable OpenRouter response caching (free cache hits)")
+    .option("--server-cache-ttl <seconds>", "Cache TTL in seconds (1-86400)", parseInt)
+    .option("--heal", "Enable response healing plugin (auto-fix malformed JSON)")
     .option("--json", "Output full response as JSON")
     .option("--quiet", "Output only the response text (for piping)")
     .option("--save <path>", "Save generated image to file (for image models)")
     .option("--stream", "Stream the response (default for TTY)")
     .option("--no-stream", "Wait for full response")
     .option("--no-log", "Don't save to history")
+    .option("--conversation", "Start or continue a conversation (persists context)")
+    .option("--continue", "Continue the most recent conversation")
+    .option("--resume <id>", "Resume a specific conversation by ID")
     .action(async (messageParts: string[], opts) => {
       const apiKey = requireOpenRouterKey();
       const message = messageParts.join(" ");
@@ -68,10 +93,11 @@ export function chatCommand(): Command {
       // Build message content (handles multimodal)
       const contentParts: ChatContentPart[] = [];
 
-      // Add image if provided
-      if (opts.image) {
-        const base64 = fileToBase64(opts.image);
-        const mime = getMimeType(opts.image, IMAGE_EXTS, "image/jpeg");
+      // Add images if provided (supports multiple --image flags)
+      const images = opts.image ? (Array.isArray(opts.image) ? opts.image : [opts.image]) : [];
+      for (const imgPath of images) {
+        const base64 = fileToBase64(imgPath);
+        const mime = getMimeType(imgPath, IMAGE_EXTS, "image/jpeg");
         contentParts.push({
           type: "image_url",
           image_url: { url: `data:${mime};base64,${base64}` },
@@ -98,27 +124,92 @@ export function chatCommand(): Command {
         });
       }
 
+      // Add PDF if provided
+      if (opts.pdf) {
+        const pdfPath = resolve(opts.pdf);
+        if (pdfPath.startsWith("http://") || pdfPath.startsWith("https://")) {
+          // URL-based PDF
+          contentParts.push({
+            type: "file",
+            file: { filename: pdfPath.split("/").pop() || "document.pdf", file_data: pdfPath },
+          });
+        } else {
+          // Local file - base64 encode
+          if (!existsSync(pdfPath)) {
+            error(`PDF not found: ${opts.pdf}`);
+            process.exit(1);
+          }
+          const base64 = readFileSync(pdfPath).toString("base64");
+          contentParts.push({
+            type: "file",
+            file: {
+              filename: pdfPath.split(/[\\/]/).pop() || "document.pdf",
+              file_data: `data:application/pdf;base64,${base64}`,
+            },
+          });
+        }
+      }
+
       // Add text content
       contentParts.push({ type: "text", text: message });
 
       // Build messages array
       const messages: ChatMessage[] = [];
-      if (opts.system) {
-        messages.push({ role: "system", content: opts.system });
+
+      // Determine modality for default model selection
+      const modality = images.length > 0 ? "vision" : opts.audio ? "audio" : opts.video ? "video" : opts.pdf ? "vision" : "text";
+      let model = opts.model || getDefaultModel(modality) || "openai/gpt-4o-mini";
+      
+      // Apply :exacto suffix for quality-first provider routing
+      if (opts.exacto && !model.includes(":exacto")) {
+        model = `${model}:exacto`;
+      }
+      
+      const useStream = opts.stream ?? (isTTY && !opts.json && !opts.quiet);
+      const startTime = Date.now();
+
+      // ── Conversation context loading ──────────────────────────────────
+      let conversationId: string | null = null;
+      const useConversation = opts.conversation || opts.continue || opts.resume;
+
+      if (opts.continue || opts.resume) {
+        // Load existing conversation
+        const loadId = opts.resume || getLastConversationId();
+        if (!loadId) {
+          error("No conversation to continue. Use --conversation to start a new one.");
+          process.exit(1);
+        }
+        const entries = loadConversation(loadId);
+        if (entries.length === 0) {
+          error(`Conversation ${loadId} is empty or not found.`);
+          process.exit(1);
+        }
+        conversationId = loadId;
+
+        // Prepend conversation history as ChatMessages
+        const historyMsgs = toMessages(entries);
+        messages.push(...historyMsgs);
+
+        if (!opts.quiet) {
+          const msgCount = entries.filter((e) => e.role === "user").length;
+          console.log(chalk.dim(`  Continuing conversation ${loadId} (${msgCount} prior messages)`));
+        }
+      } else if (opts.conversation) {
+        // Start fresh — conversation will be created after response
+        conversationId = null;
       }
 
-      // Use content parts if we have multimodal, otherwise plain text
+      // Add system prompt if provided (and not already in conversation history)
+      if (opts.system && !messages.some((m) => m.role === "system")) {
+        messages.unshift({ role: "system", content: opts.system });
+      }
+
+      // Add user message
       if (contentParts.length > 1) {
         messages.push({ role: "user", content: contentParts });
       } else {
         messages.push({ role: "user", content: message });
       }
-
-      // Determine modality for default model selection
-      const modality = opts.image ? "vision" : opts.audio ? "audio" : opts.video ? "video" : "text";
-      const model = opts.model || getDefaultModel(modality) || "openai/gpt-4o-mini";
-      const useStream = opts.stream ?? (isTTY && !opts.json && !opts.quiet);
-      const startTime = Date.now();
 
       // Build request with optional reasoning
       const request: any = {
@@ -137,11 +228,70 @@ export function chatCommand(): Command {
         request.reasoning = { effort };
       }
 
+      // ── Server Tools ────────────────────────────────────────────────────
+      const serverTools: any[] = [];
+
+      if (opts.webSearch) {
+        const wsParams: any = {};
+        if (opts.webSearchEngine) wsParams.engine = opts.webSearchEngine;
+        if (opts.webSearchMax) wsParams.max_results = opts.webSearchMax;
+        serverTools.push({
+          type: "openrouter:web_search",
+          ...(Object.keys(wsParams).length > 0 && { parameters: wsParams }),
+        });
+      }
+
+      if (opts.webFetch) {
+        serverTools.push({ type: "openrouter:web_fetch" });
+      }
+
+      if (opts.datetime) {
+        serverTools.push({ type: "openrouter:datetime" });
+      }
+
+      if (serverTools.length > 0) {
+        request.tools = serverTools;
+      }
+
+      // ── Plugins ─────────────────────────────────────────────────────────
+      const plugins: any[] = [];
+
+      if (opts.pdfEngine) {
+        plugins.push({
+          id: "file-parser",
+          pdf: { engine: opts.pdfEngine },
+        });
+      }
+
+      if (opts.heal) {
+        plugins.push({ id: "response-healing" });
+      }
+
+      if (plugins.length > 0) {
+        request.plugins = plugins;
+      }
+
+      // ── Custom headers for server-side caching ──────────────────────────
+      const extraHeaders: Record<string, string> = {};
+      if (opts.serverCache) {
+        extraHeaders["X-OpenRouter-Cache"] = "true";
+        if (opts.serverCacheTtl) {
+          extraHeaders["X-OpenRouter-Cache-TTL"] = String(opts.serverCacheTtl);
+        }
+      }
+
       // Log what we're sending
       const attachments: string[] = [];
-      if (opts.image) attachments.push(`image: ${opts.image}`);
+      if (images.length > 0) attachments.push(`images: ${images.join(", ")}`);
       if (opts.audio) attachments.push(`audio: ${opts.audio}`);
       if (opts.video) attachments.push(`video: ${opts.video}`);
+      if (opts.pdf) attachments.push(`pdf: ${opts.pdf}`);
+      if (opts.webSearch) attachments.push("web-search");
+      if (opts.webFetch) attachments.push("web-fetch");
+      if (opts.datetime) attachments.push("datetime");
+      if (opts.exacto) attachments.push("exacto");
+      if (opts.serverCache) attachments.push("cached");
+      if (opts.heal) attachments.push("healed");
 
       try {
         if (useStream) {
@@ -151,7 +301,7 @@ export function chatCommand(): Command {
             : `Querying ${chalk.cyan(model)}...`;
           const spinner = ora({ text: spinnerText, spinner: "dots" }).start();
 
-          const stream = await chatCompletionStream(apiKey, { ...request, stream: true });
+          const stream = await chatCompletionStream(apiKey, { ...request, stream: true }, extraHeaders);
 
           spinner.stop();
           const decoder = new TextDecoder();
@@ -210,6 +360,7 @@ export function chatCommand(): Command {
             if (provider) stats.push(`• ${provider}`);
             if (reasoningText) stats.push(`• reasoning`);
             if (attachments.length > 0) stats.push(`• ${attachments.join(", ")}`);
+            if (conversationId) stats.push(`• conv:${conversationId}`);
             console.log(chalk.dim(`  ${stats.join(" ")}`));
           }
 
@@ -237,6 +388,31 @@ export function chatCommand(): Command {
             });
           }
 
+          // Save to conversation
+          if (useConversation && fullText) {
+            const latencyMs = Date.now() - startTime;
+            const costEstimate = await estimateCost(apiKey, model, usage.prompt_tokens, usage.completion_tokens);
+            if (conversationId) {
+              // Append to existing conversation
+              const userContent = contentParts.length > 1 ? contentParts : message;
+              appendConversation(conversationId, userContent, fullText, model, {
+                usage: { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, totalTokens: usage.total_tokens },
+                costEstimate,
+                latencyMs,
+              });
+            } else {
+              // Create new conversation
+              conversationId = createConversation(opts.system, contentParts.length > 1 ? contentParts : message, model, fullText, {
+                usage: { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, totalTokens: usage.total_tokens },
+                costEstimate,
+                latencyMs,
+              });
+              if (!opts.quiet) {
+                console.log(chalk.dim(`  Conversation: ${conversationId}`));
+              }
+            }
+          }
+
         } else {
           // Non-streaming mode
           const spinnerText = attachments.length > 0
@@ -244,7 +420,7 @@ export function chatCommand(): Command {
             : `Querying ${chalk.cyan(model)}...`;
           const spinner = ora({ text: spinnerText, spinner: "dots" }).start();
 
-          const response = await chatCompletion(apiKey, request);
+          const response = await chatCompletion(apiKey, request, extraHeaders);
 
           const latencyMs = Date.now() - startTime;
           spinner.stop();
@@ -252,6 +428,8 @@ export function chatCommand(): Command {
           const respMessage = response.choices?.[0]?.message;
           const content = respMessage?.content ?? "";
           const reasoning = (respMessage as any)?.reasoning;
+          const cacheStatus = (response as any)?.usage?.cache_status;
+          const annotations = respMessage?.annotations;
 
           // Log to history
           if (opts.log !== false && content) {
@@ -280,6 +458,30 @@ export function chatCommand(): Command {
               temperature: opts.temperature,
               maxTokens: opts.maxTokens,
             });
+          }
+
+          // Save to conversation
+          if (useConversation && content) {
+            const costEstimate = await estimateCost(apiKey, model, response.usage.prompt_tokens, response.usage.completion_tokens);
+            if (conversationId) {
+              // Append to existing conversation
+              const userContent = contentParts.length > 1 ? contentParts : message;
+              appendConversation(conversationId, userContent, content, model, {
+                usage: { promptTokens: response.usage.prompt_tokens, completionTokens: response.usage.completion_tokens, totalTokens: response.usage.total_tokens },
+                costEstimate,
+                latencyMs,
+              });
+            } else {
+              // Create new conversation
+              conversationId = createConversation(opts.system, contentParts.length > 1 ? contentParts : message, model, content, {
+                usage: { promptTokens: response.usage.prompt_tokens, completionTokens: response.usage.completion_tokens, totalTokens: response.usage.total_tokens },
+                costEstimate,
+                latencyMs,
+              });
+              if (!opts.quiet) {
+                console.log(chalk.dim(`  Conversation: ${conversationId}`));
+              }
+            }
           }
 
           // Save image if --save flag and images exist
@@ -360,7 +562,20 @@ export function chatCommand(): Command {
             if (tokenDetails?.image_tokens) stats.push(`• ${tokenDetails.image_tokens} img tokens`);
             if (tokenDetails?.reasoning_tokens) stats.push(`• ${tokenDetails.reasoning_tokens} reasoning tokens`);
             if (promptDetails?.cached_tokens) stats.push(`• ${promptDetails.cached_tokens} cached`);
+            if (opts.serverCache) {
+              // Check response headers for cache status via usage
+              const cacheInfo = (response as any)?.cache;
+              if (cacheInfo?.status === 'HIT') {
+                stats.push(`• cache HIT`);
+              } else if (cacheInfo?.status === 'MISS') {
+                stats.push(`• cache MISS`);
+              }
+            }
+            if (annotations && annotations.length > 0) {
+              stats.push(`• ${annotations.length} file annotation(s)`);
+            }
             if (attachments.length > 0) stats.push(`• ${attachments.join(", ")}`);
+            if (conversationId) stats.push(`• conv:${conversationId}`);
             console.log(chalk.dim(`  ${stats.join(" ")}`));
           }
         }

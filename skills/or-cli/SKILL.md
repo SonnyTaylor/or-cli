@@ -1,6 +1,6 @@
 ---
 name: or-cli
-description: Browse, search, filter, and compare AI models on OpenRouter using the `or` CLI. Use when the user asks about available models, wants to find a model for a task, needs pricing info, wants to compare options, asks "which model should I use", needs to check model capabilities, or wants provider/uptime info. Also use for chat/completions, multimodal tasks (image/audio/video analysis), benchmark queries, image generation/editing, embeddings, and any OpenRouter API interaction.
+description: Browse, search, filter, and compare AI models on OpenRouter using the `or` CLI. Use when the user asks about available models, wants to find a model for a task, needs pricing info, wants to compare options, asks "which model should I use", needs to check model capabilities, or wants provider/uptime info. Also use for chat/completions, multimodal tasks (image/audio/video/PDF analysis), server tools (web search, web fetch, datetime), benchmark queries, image generation/editing, embeddings, and any OpenRouter API interaction.
 ---
 
 # or CLI
@@ -22,22 +22,51 @@ The `or` CLI queries OpenRouter in real-time. **Never hardcode or guess model na
 or models                           # List all models
 or models "coding" --tools          # Search: tool-capable coding models
 or models -t text --sort price -n 10  # Top 10 cheapest text models
+or models --new                     # Recently added models
+or models -f                        # Free models only
 or show <model-id>                  # Full details with price ranges
+or show <model-id>:exacto           # Show with :exacto variant info
 or compare id1 id2 id3              # Side-by-side comparison
+or compare id1 id2 --cost-estimate  # With cost per coding session
 
 # Chat
 or chat "question" -m <model-id>    # Send a message
 or chat "describe" --image photo.jpg -m <model-id>  # Image analysis
 or chat "transcribe" --audio recording.wav -m <model-id>  # Audio
+or chat "summarize" --video clip.mp4 -m <model-id>  # Video
+or chat "explain" --pdf document.pdf -m <model-id>  # PDF analysis
+or chat "what's new" --web-search -m <model-id>  # Web search enabled
+or chat "read this" --web-fetch -m <model-id>  # URL fetching enabled
+or chat "what time" --datetime -m <model-id>  # Current date/time
+or chat "question" -m <model-id>:exacto  # Quality-first routing
+or chat "question" --server-cache -m <model-id>  # Free cached responses
+or chat "json" --heal --json -m <model-id>  # Auto-fix malformed JSON
+
+# Conversations (multi-turn)
+or chat "What is 2+2?" --conversation -m <model>  # Start a conversation
+or chat "Now multiply by 10" --continue -m <model>  # Continue last conversation
+or chat "What was that?" --resume <id> -m <model>  # Resume specific conversation
+or conversations                    # List all conversations
+or conversations show <id>          # View full thread with session totals
+or conversations delete <id>        # Delete a conversation
 
 # Benchmarks
 or benchmarks --type llm --sort coding -n 10  # Best coders
+or benchmarks --type llm --json               # JSON for piping
 or benchmarks --type text-to-image --sort score -n 5  # Best image gen
 or benchmarks --type image-editing --or -n 10  # With OpenRouter IDs
 
 # Providers & Endpoints
 or endpoints <model-id>             # Per-provider uptime/latency
 or providers                        # All providers with datacenters
+
+# Rankings & Popularity
+or rankings                         # Daily token usage (top models)
+or rankings --model deepseek        # Filter by model name
+
+# Spending
+or cost                             # Spending breakdown by model
+or cost --by-day                    # Spending by day
 ```
 
 ## Common Mistakes
@@ -47,6 +76,12 @@ or providers                        # All providers with datacenters
 - **Benchmark model IDs ≠ OpenRouter model IDs.** Benchmarks from Artificial Analysis track models across many providers. Always use `or models -t <type>` to find actual OpenRouter IDs — don't assume a benchmark model name works with `or chat`.
 - **Vision ≠ Generation**: Vision models understand images (image→text). They don't create them.
 - **Free models have rate limits.** If you get a 429, fall back to a paid model.
-- **`--quiet` only works on `or chat`** — do NOT use `--quiet` on `or models`, `or show`, or `or benchmarks`. Those commands don't support it and will error silently if you pipe stderr.
+- **`--quiet` only works on `or chat`** — other commands will warn and suggest `--json` instead.
 - **Use `--save <path>` for images** — don't try to extract images from `--json` output manually.
-- **Default output shows metrics** — cost, tps, tokens, latency are printed by default. Use `--quiet` to suppress them for piping.
+- **Use `--json` for piping** — all commands support `--json` for machine-readable output.
+- **Use `or rankings` for popularity** — this shows real usage data, not benchmarks.
+- **Use `or compare --cost-estimate`** — quickly see how much a model costs per typical coding session.
+- **Use `:exacto` suffix for quality-first routing** — when tool-calling reliability matters more than cost.
+- **Use `--server-cache` for repeated queries** — cache hits are free (no tokens charged).
+- **PDFs work with any model** — OpenRouter parses them server-side via Cloudflare AI or Mistral OCR.
+- **Server tools are model-decided** — with `--web-search`, the model decides when to search, you don't control it.

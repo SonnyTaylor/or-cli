@@ -10,7 +10,7 @@ import {
   getModelModality,
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks } from "../lib/artificial-analysis";
-import { getFormat, outputTable, formatPriceStr, formatTps } from "../lib/format";
+import { getFormat, outputTable, formatPriceStr, formatTps, formatCtx, formatDollars, estimateCost } from "../lib/format";
 import type { ORModel, AAModel, GlobalOptions } from "../lib/types";
 
 export function compareCommand(): Command {
@@ -18,10 +18,11 @@ export function compareCommand(): Command {
     .description("Compare multiple models side-by-side")
     .argument("<model-ids...>", "Two or more model IDs to compare")
     .option("--benchmarks", "Include AA benchmark scores")
+    .option("--cost-estimate", "Show estimated cost per typical coding session (100K in / 50K out)")
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
     .option("--no-cache", "Bypass cache")
-    .action(async (modelIds: string[], opts: GlobalOptions & { benchmarks?: boolean }) => {
+    .action(async (modelIds: string[], opts: GlobalOptions & { benchmarks?: boolean; costEstimate?: boolean }) => {
       const apiKey = requireOpenRouterKey();
       const format = getFormat(opts);
 
@@ -147,6 +148,34 @@ export function compareCommand(): Command {
           ]);
         }
 
+        // Cost estimate: 100K input + 50K output (typical coding session)
+        if (opts.costEstimate) {
+          const INPUT_TOKENS = 100_000;
+          const OUTPUT_TOKENS = 50_000;
+          rows.push([
+            chalk.bold(""),
+            ...models.map(() => ""),
+          ]);
+          rows.push([
+            chalk.bold(`Cost est (${formatTokens(INPUT_TOKENS)} in / ${formatTokens(OUTPUT_TOKENS)} out)`),
+            ...models.map((m) => {
+              const input = parseFloat(m.pricing.prompt ?? "0") * 1_000_000;
+              const output = parseFloat(m.pricing.completion ?? "0") * 1_000_000;
+              const { total } = estimateCost(input, output, INPUT_TOKENS, OUTPUT_TOKENS);
+              return chalk.yellow(formatDollars(total));
+            }),
+          ]);
+          rows.push([
+            chalk.bold("Cost est (500K in / 100K out)"),
+            ...models.map((m) => {
+              const input = parseFloat(m.pricing.prompt ?? "0") * 1_000_000;
+              const output = parseFloat(m.pricing.completion ?? "0") * 1_000_000;
+              const { total } = estimateCost(input, output, 500_000, 100_000);
+              return chalk.yellow(formatDollars(total));
+            }),
+          ]);
+        }
+
         outputTable(headers, rows, format);
       } catch (err) {
         spinner.fail("Failed to fetch models");
@@ -158,8 +187,10 @@ export function compareCommand(): Command {
   return cmd;
 }
 
-function formatCtx(n: number): string {
+function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
   return String(n);
 }
+
+

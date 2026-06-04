@@ -48,11 +48,12 @@ export interface ORModelEndpoint {
 }
 
 export interface ChatContentPart {
-  type: "text" | "image_url" | "input_audio" | "video_url";
+  type: "text" | "image_url" | "input_audio" | "video_url" | "file";
   text?: string;
   image_url?: { url: string; detail?: string };
   input_audio?: { data: string; format: string };
   video_url?: { url: string };
+  file?: { filename: string; file_data: string };
 }
 
 export interface ChatMessage {
@@ -165,7 +166,6 @@ export type OutputFormat = "table" | "json" | "md";
 export interface GlobalOptions {
   json?: boolean;
   md?: boolean;
-  quiet?: boolean;
   noCache?: boolean;
 }
 

@@ -15,13 +15,14 @@ import { versionCommand } from "./commands/version";
 import { doctorCommand } from "./commands/doctor";
 import { costCommand } from "./commands/cost";
 import { configCommand } from "./commands/config";
+import { conversationsCommand } from "./commands/conversations";
 
 const program = new Command();
 
 program
   .name("or")
   .description("CLI for OpenRouter — search models, send messages, view benchmarks")
-  .version("0.2.0");
+  .version("0.3.0");
 
 program.addCommand(authCommand());
 program.addCommand(chatCommand());
@@ -39,5 +40,6 @@ program.addCommand(versionCommand());
 program.addCommand(doctorCommand());
 program.addCommand(costCommand());
 program.addCommand(configCommand());
+program.addCommand(conversationsCommand());
 
 program.parse();

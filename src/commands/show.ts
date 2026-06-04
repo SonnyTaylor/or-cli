@@ -12,7 +12,7 @@ import {
   isEmbeddingModel,
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks } from "../lib/artificial-analysis";
-import { getFormat, formatPriceStr, formatTps, modalityEmoji } from "../lib/format";
+import { getFormat, formatPriceStr, formatTps, modalityEmoji, formatCtxLong } from "../lib/format";
 import type { GlobalOptions, ORModel } from "../lib/types";
 
 interface Endpoint {
@@ -277,16 +277,21 @@ export function showCommand(): Command {
               `    Uptime (1d):   ${worstUptime.toFixed(1)}% – ${bestUptime.toFixed(1)}%`
             );
           }
+          if (endpoints.length > 1) {
+            console.log(
+              chalk.dim(`    💡 Tip: Use ${m.id}:exacto for quality-first provider routing`)
+            );
+          }
           console.log("");
         }
 
         // ── Specs ─────────────────────────────────────────────────────────
         console.log(chalk.bold("  Specs"));
-        console.log(`    Context:     ${formatCtx(m.context_length)}`);
+        console.log(`    Context:     ${formatCtxLong(m.context_length)}`);
         console.log(
           `    Max output:  ${
             m.top_provider?.max_completion_tokens
-              ? formatCtx(m.top_provider.max_completion_tokens)
+              ? formatCtxLong(m.top_provider.max_completion_tokens)
               : "—"
           }`
         );
@@ -378,11 +383,7 @@ export function showCommand(): Command {
   return cmd;
 }
 
-function formatCtx(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M tokens`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K tokens`;
-  return `${n} tokens`;
-}
+
 
 function pct(n: number | null | undefined): string | undefined {
   if (n == null) return undefined;

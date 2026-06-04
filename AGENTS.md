@@ -66,7 +66,7 @@ or-cli/
 
 ## Versioning
 
-We use semver. Current: **v0.2.0**
+We use semver. Current: **v0.3.0**
 
 **Bump the version in both places when releasing:**
 1. `package.json` → `"version": "0.2.0"`
@@ -113,6 +113,14 @@ This project runs on **Bun**, not Node. Key differences that have bitten us:
 5. **`/models/{id}/endpoints`** — Some models are hidden from `/models` but accessible via their endpoints. We use this for per-image pricing enrichment.
 
 6. **Image output format** — When a model generates an image, it's in `response.choices[0].message.images[0].image_url.url` as a base64 data URI, NOT in the standard `content` array. The `--save` flag handles extraction automatically.
+
+7. **PDF support** — PDFs can be sent as local files (base64 encoded) or URLs. The `file` content type is used. Models that support files natively get the raw PDF; others get parsed text/images via Cloudflare AI or Mistral OCR.
+
+8. **Server tools** — `--web-search`, `--web-fetch`, `--datetime` are model-decided tools. The model chooses when to call them. OpenRouter executes server-side and returns results. Costs: web search $0.005/request (Exa/Parallel), web fetch $0.001/fetch.
+
+9. **`:exacto` variant** — Appending `:exacto` to a model ID routes to providers with stronger tool-calling quality signals. Costs may be higher than default routing.
+
+10. **Server-side caching** — `--server-cache` enables OpenRouter's response caching. Cache hits are free (zero tokens charged). Identical requests (same model, messages, params) within TTL return cached responses.
 
 ### Caching
 
@@ -259,6 +267,9 @@ or cost
 or credits
 or history list
 or cache stats
+
+# New features (v0.3.0)
+or chat --help | grep -E '(pdf|web-search|exacto|server-cache|heal)'
 ```
 
 ## PR/Commit Conventions
@@ -267,3 +278,33 @@ or cache stats
 - Bump version in `package.json` + `src/cli.ts` for feature additions
 - Run `npx skills add . -g -y` after skill changes
 - Don't commit `node_modules/`, `bun.lock`, cache files, or API keys
+
+## v0.3.0 Features (OpenRouter API additions)
+
+### PDF Support (`--pdf`)
+- Send PDF files via URL or base64-encoded local files
+- Works with any model (server-side parsing via Cloudflare AI or Mistral OCR)
+- `--pdf-engine` flag to select processing engine
+
+### Server Tools
+- `--web-search` — Model can search the web for current info
+- `--web-search-engine` — Select search backend (auto, exa, firecrawl, parallel)
+- `--web-search-max` — Limit results per search
+- `--web-fetch` — Model can fetch content from URLs
+- `--datetime` — Model gets current date/time
+- All server tools are model-decided (model chooses when to call them)
+
+### Exacto Variant (`--exacto`)
+- Quality-first provider routing via `:exacto` suffix or `--exacto` flag
+- Useful for agentic workflows where tool-calling reliability matters
+- `or show` now displays exacto tip for multi-provider models
+
+### Server-Side Response Caching (`--server-cache`)
+- Enable OpenRouter's response caching via `X-OpenRouter-Cache` header
+- Cache hits are free (zero tokens charged)
+- `--server-cache-ttl` to set custom TTL (1-86400 seconds)
+
+### Response Healing (`--heal`)
+- Auto-fix malformed JSON responses from models
+- Handles missing brackets, trailing commas, markdown wrappers, mixed text
+- Only works with non-streaming requests
