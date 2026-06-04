@@ -11,13 +11,14 @@ import { endpointsCommand } from "./commands/endpoints";
 import { providersCommand } from "./commands/providers";
 import { creditsCommand } from "./commands/credits";
 import { rankingsCommand } from "./commands/rankings";
+import { versionCommand } from "./commands/version";
 
 const program = new Command();
 
 program
   .name("or")
   .description("CLI for OpenRouter — search models, send messages, view benchmarks")
-  .version("0.1.0");
+  .version("0.2.0");
 
 program.addCommand(authCommand());
 program.addCommand(chatCommand());
@@ -31,5 +32,6 @@ program.addCommand(endpointsCommand());
 program.addCommand(providersCommand());
 program.addCommand(creditsCommand());
 program.addCommand(rankingsCommand());
+program.addCommand(versionCommand());
 
 program.parse();

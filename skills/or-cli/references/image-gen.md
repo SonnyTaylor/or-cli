@@ -21,14 +21,16 @@ Image models have two pricing types:
 Per-image models (Recraft, xAI Grok, Microsoft MAI, Sourceful) are often cheaper for single images but don't support token-based cost optimization.
 
 ```bash
-# Image generation models
+# Image generation models (all 30+ models including Recraft, FLUX, xAI, etc.)
 or models -t image
 
-# Vision models (understanding)
+# Vision models (understanding only, no generation)
 or models --vision
 
 # Search for specific capabilities
 or models "image editing"
+or models "recraft"
+or models "flux"
 ```
 
 ## Checking Capabilities
