@@ -3,7 +3,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs";
 import { resolve, extname, dirname } from "path";
-import { requireOpenRouterKey, getConfig } from "../lib/config";
+import { requireOpenRouterKey, getConfig, getDefaultModel } from "../lib/config";
 import { chatCompletion, chatCompletionStream, fetchModels, combinedPrice } from "../lib/openrouter";
 import { getFormat, error } from "../lib/format";
 import { appendHistory, generateId } from "../lib/history";
@@ -114,7 +114,9 @@ export function chatCommand(): Command {
         messages.push({ role: "user", content: message });
       }
 
-      const model = opts.model || getConfig().defaultModel || "openai/gpt-4o-mini";
+      // Determine modality for default model selection
+      const modality = opts.image ? "vision" : opts.audio ? "audio" : opts.video ? "video" : "text";
+      const model = opts.model || getDefaultModel(modality) || "openai/gpt-4o-mini";
       const useStream = opts.stream ?? (isTTY && !opts.json && !opts.quiet);
       const startTime = Date.now();
 

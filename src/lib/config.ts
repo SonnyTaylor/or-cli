@@ -5,10 +5,19 @@ import { homedir } from "os";
 const CONFIG_DIR = join(homedir(), ".or-cli");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 
+export interface DefaultModels {
+  text?: string;       // Default for text-only prompts
+  image?: string;      // Default for image generation
+  vision?: string;     // Default when --image is provided
+  audio?: string;      // Default when --audio is provided
+  video?: string;      // Default when --video is provided
+}
+
 export interface Config {
   openrouterApiKey?: string;
   artificialAnalysisApiKey?: string;
-  defaultModel?: string;
+  defaultModel?: string;  // Fallback for all modalities
+  defaultModels?: DefaultModels;  // Per-modality defaults
   cacheTtlMs: number; // default 6 hours
 }
 
@@ -76,4 +85,16 @@ export function getORKey(): string | undefined {
     return process.env.OPENROUTER_API_KEY;
   }
   return getConfig().openrouterApiKey;
+}
+
+export function getDefaultModel(modality?: string): string | undefined {
+  const config = getConfig();
+  
+  // Check per-modality default first
+  if (modality && config.defaultModels?.[modality as keyof DefaultModels]) {
+    return config.defaultModels[modality as keyof DefaultModels];
+  }
+  
+  // Fall back to global default
+  return config.defaultModel;
 }
