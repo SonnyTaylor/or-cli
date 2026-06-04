@@ -37,10 +37,12 @@ or-cli/
 │   │   ├── cache.ts          # Cache stats + clear
 │   │   ├── chat.ts           # Send messages, --save for images
 │   │   ├── compare.ts        # Side-by-side model comparison
+│   │   ├── cost.ts           # Spending breakdown from history
 │   │   ├── credits.ts        # Account balance
+│   │   ├── doctor.ts         # Config + connectivity diagnostics
 │   │   ├── endpoints.ts      # Per-provider details
 │   │   ├── history.ts        # Chat history (JSONL)
-│   │   ├── models.ts         # Model search/filter/list
+│   │   ├── models.ts         # Model search/filter/list (--new flag)
 │   │   ├── providers.ts      # Provider datacenter info
 │   │   ├── rankings.ts       # Daily token usage
 │   │   ├── show.ts           # Single model details
@@ -228,12 +230,15 @@ No formal test suite yet. Test manually:
 ```bash
 # Smoke test all commands
 or version
+or doctor
 or auth --show
 or models -t text -n 3
 or models -t image -n 3
+or models --new -n 5
 or show google/gemini-2.5-flash
 or benchmarks --type llm -n 3
 or benchmarks --type image-editing --or -n 3
+or cost
 or credits
 or history list
 or cache stats
