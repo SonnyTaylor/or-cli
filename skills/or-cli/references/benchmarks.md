@@ -58,6 +58,7 @@ or benchmarks --type text-to-video --sort score -n 5
 
 ## Notes
 
+- **Benchmark model IDs ≠ OpenRouter model IDs.** Benchmarks come from Artificial Analysis which tracks models across many providers. A model like `black-forest-labs/flux-2-max` in benchmarks may not exist on OpenRouter. Always use `or models -t <type>` to find the actual OpenRouter model IDs.
 - ELO ratings are category-relative (1200 in image ≠ 1200 in video)
 - Speed varies by provider
 - Use `or models --benchmarks` to inline AA scores in model listings

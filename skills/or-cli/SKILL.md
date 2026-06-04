@@ -43,6 +43,7 @@ or providers                        # All providers with datacenters
 
 - **Always specify a model with `-m`**. Without it, a default is used which may not be optimal.
 - **Model IDs include the provider prefix** — e.g. `deepseek/deepseek-v4-flash`, not just `deepseek-v4-flash`.
+- **Benchmark model IDs ≠ OpenRouter model IDs.** Benchmarks from Artificial Analysis track models across many providers. Always use `or models -t <type>` to find actual OpenRouter IDs — don't assume a benchmark model name works with `or chat`.
 - **Vision ≠ Generation**: Vision models understand images (image→text). They don't create them.
 - **Free models have rate limits.** If you get a 429, fall back to a paid model.
 - **`--quiet --no-stream`** is the most reliable pattern for agent pipelines.

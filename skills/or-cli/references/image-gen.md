@@ -36,6 +36,8 @@ or benchmarks --type text-to-image --sort score -n 10
 or benchmarks --type image-editing --sort score -n 10
 ```
 
+**Warning:** Benchmark model IDs (e.g. `black-forest-labs/flux-2-max`) are from Artificial Analysis and may not exist on OpenRouter. Always use `or models -t image` to get the actual available model IDs.
+
 ## Common Pitfalls
 
 - **Vision ≠ Generation**: Vision models understand images (image→text). They don't create them.
