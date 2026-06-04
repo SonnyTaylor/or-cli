@@ -47,12 +47,37 @@ or benchmarks --type image-editing --sort score -n 10
 ## Examples
 
 ```bash
-# Generate
-or chat "Generate a logo of a mountain" -m google/gemini-2.5-flash-image --quiet
+# Generate and save image
+or chat "Generate a logo of a mountain" -m google/gemini-2.5-flash-image --save logo.png --no-stream
 
-# Understand
+# Edit image and save
+or chat "Replace the window with a door" --image input.jpg -m google/gemini-2.5-flash-image --save output.png --no-stream
+
+# Understand (text output only)
 or chat "Describe this photo" -m openai/gpt-4o --image photo.jpg --quiet
 
 # OCR
 or chat "Extract all text" -m google/gemini-2.5-flash --image document.jpg --quiet
 ```
+
+## Saving Generated Images
+
+Use `--save <path>` to save images directly to disk:
+
+```bash
+or chat "Generate a red circle" -m google/gemini-2.5-flash-image --save circle.png --no-stream
+```
+
+Output:
+```
+✓ Image saved to /path/to/circle.png (180KB)
+Sure, here's your red circle:
+
+  1313 tokens (8 in / 1305 out) • 224 tps • 5.8s • $0.0387 • google/gemini-2.5-flash-image • Google • 1290 img tokens
+```
+
+The `--save` flag:
+- Auto-detects format from the model's output (PNG, JPEG, etc.)
+- Creates parent directories if needed
+- Shows file size in output
+- Works with `--quiet` (still saves, just suppresses text)

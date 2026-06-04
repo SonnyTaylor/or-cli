@@ -23,6 +23,7 @@ or chat "Write a haiku" -m google/gemini-2.5-flash --max-tokens 100
 | `--image <path>` | Send an image file (jpg, png, gif, webp) |
 | `--audio <path>` | Send an audio file (wav, mp3, m4a, flac) |
 | `--video <path>` | Send a video file (mp4, webm, mov) |
+| `--save <path>` | Save generated image to file (for image gen models) |
 | `--json` | Full API response as JSON |
 | `--quiet` | Only the response text (for piping) |
 | `--stream` / `--no-stream` | Stream vs wait for full response |
@@ -58,7 +59,32 @@ or chat "Generate a README" --quiet --no-stream > README.md
 
 # Get full JSON response with token counts
 or chat "List 3 colors" --json --no-stream
+
+# Generate and save image
+or chat "Generate a logo" -m google/gemini-2.5-flash-image --save logo.png --no-stream
+
+# Edit image and save result
+or chat "Replace window with door" --image input.jpg -m google/gemini-2.5-flash-image --save output.png --no-stream
 ```
+
+## Output Metrics
+
+By default, `or chat` prints detailed metrics after the response:
+
+```
+  1303 tokens (4 in / 1299 out) • 186 tps • 7.0s • $0.0387 • google/gemini-2.5-flash-image • Google • 1290 img tokens
+```
+
+Metrics include:
+- **tokens** — total + input/output breakdown
+- **tps** — tokens per second (output speed)
+- **time** — total latency
+- **cost** — actual API cost in USD
+- **model** — model used
+- **provider** — backend provider
+- **img tokens** — image token count (for vision models)
+- **reasoning tokens** — thinking token count (for reasoning models)
+- **cached** — cached prompt tokens (if any)
 
 ## Chat History
 

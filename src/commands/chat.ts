@@ -1,8 +1,8 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
-import { readFileSync, existsSync } from "fs";
-import { resolve, extname } from "path";
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs";
+import { resolve, extname, dirname } from "path";
 import { requireOpenRouterKey, getConfig } from "../lib/config";
 import { chatCompletion, chatCompletionStream, fetchModels, combinedPrice } from "../lib/openrouter";
 import { getFormat, error } from "../lib/format";
@@ -55,6 +55,7 @@ export function chatCommand(): Command {
     .option("--video <path>", "Send a video file (mp4, webm, mov) — requires Gemini or similar")
     .option("--json", "Output full response as JSON")
     .option("--quiet", "Output only the response text (for piping)")
+    .option("--save <path>", "Save generated image to file (for image models)")
     .option("--stream", "Stream the response (default for TTY)")
     .option("--no-stream", "Wait for full response")
     .option("--no-log", "Don't save to history")
@@ -193,6 +194,23 @@ export function chatCommand(): Command {
             process.stdout.write("\n");
           }
 
+          // Print stats for streaming mode
+          if (!opts.quiet) {
+            const latencyMs = Date.now() - startTime;
+            const tps = usage.completion_tokens / (latencyMs / 1000);
+            const stats: string[] = [
+              `${usage.total_tokens} tokens`,
+              `(${usage.prompt_tokens} in / ${usage.completion_tokens} out)`,
+              `• ${tps.toFixed(0)} tps`,
+              `• ${(latencyMs / 1000).toFixed(1)}s`,
+              `• ${model}`,
+            ];
+            if (provider) stats.push(`• ${provider}`);
+            if (reasoningText) stats.push(`• reasoning`);
+            if (attachments.length > 0) stats.push(`• ${attachments.join(", ")}`);
+            console.log(chalk.dim(`  ${stats.join(" ")}`));
+          }
+
           // Log to history
           if (opts.log !== false && fullText) {
             const latencyMs = Date.now() - startTime;
@@ -262,6 +280,33 @@ export function chatCommand(): Command {
             });
           }
 
+          // Save image if --save flag and images exist
+          if (opts.save) {
+            const images = (respMessage as any)?.images ?? [];
+            if (images.length > 0) {
+              const img = images[0];
+              const url = img?.image_url?.url ?? img?.url ?? "";
+              if (url.startsWith("data:")) {
+                const parts = url.split(",");
+                const b64 = parts[1] ?? "";
+                const imgBuf = Buffer.from(b64, "base64");
+                const savePath = resolve(opts.save);
+                mkdirSync(dirname(savePath), { recursive: true });
+                writeFileSync(savePath, imgBuf);
+                if (!opts.quiet) {
+                  console.log(chalk.green(`✓ Image saved to ${savePath} (${(imgBuf.length / 1024).toFixed(0)}KB)`));
+                }
+              } else if (url.startsWith("http")) {
+                if (!opts.quiet) {
+                  console.log(chalk.yellow(`Image URL: ${url}`));
+                  console.log(chalk.dim("Use --json to get the full response with image data"));
+                }
+              }
+            } else if (!opts.quiet) {
+              console.log(chalk.yellow("No images in response"));
+            }
+          }
+
           if (format === "json") {
             console.log(JSON.stringify(response, null, 2));
           } else if (opts.quiet) {
@@ -278,15 +323,26 @@ export function chatCommand(): Command {
             console.log(content);
             console.log("");
 
-            // Stats line
+            // Stats line — detailed metrics for agents
+            const tps = response.usage.completion_tokens / (latencyMs / 1000);
+            const cost = (response as any).usage?.cost;
+            const costDetails = (response as any).usage?.cost_details;
+            const tokenDetails = (response as any).usage?.completion_tokens_details;
+            const promptDetails = (response as any).usage?.prompt_tokens_details;
+
             const stats: string[] = [
               `${response.usage.total_tokens} tokens`,
               `(${response.usage.prompt_tokens} in / ${response.usage.completion_tokens} out)`,
-              `• ${latencyMs}ms`,
-              `• ${response.model}`,
+              `• ${tps.toFixed(0)} tps`,
+              `• ${(latencyMs / 1000).toFixed(1)}s`,
             ];
+            if (cost != null) stats.push(`• $${cost.toFixed(4)}`);
+            stats.push(`• ${response.model}`);
             if (response.provider) stats.push(`• ${response.provider}`);
-            if (reasoning) stats.push(`• reasoning included`);
+            if (reasoning) stats.push(`• reasoning`);
+            if (tokenDetails?.image_tokens) stats.push(`• ${tokenDetails.image_tokens} img tokens`);
+            if (tokenDetails?.reasoning_tokens) stats.push(`• ${tokenDetails.reasoning_tokens} reasoning tokens`);
+            if (promptDetails?.cached_tokens) stats.push(`• ${promptDetails.cached_tokens} cached`);
             if (attachments.length > 0) stats.push(`• ${attachments.join(", ")}`);
             console.log(chalk.dim(`  ${stats.join(" ")}`));
           }

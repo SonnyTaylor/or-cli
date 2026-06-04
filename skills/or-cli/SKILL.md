@@ -47,4 +47,6 @@ or providers                        # All providers with datacenters
 - **Benchmark model IDs ≠ OpenRouter model IDs.** Benchmarks from Artificial Analysis track models across many providers. Always use `or models -t <type>` to find actual OpenRouter IDs — don't assume a benchmark model name works with `or chat`.
 - **Vision ≠ Generation**: Vision models understand images (image→text). They don't create them.
 - **Free models have rate limits.** If you get a 429, fall back to a paid model.
-- **`--quiet --no-stream`** is the most reliable pattern for agent pipelines.
+- **`--quiet` only works on `or chat`** — do NOT use `--quiet` on `or models`, `or show`, or `or benchmarks`. Those commands don't support it and will error silently if you pipe stderr.
+- **Use `--save <path>` for images** — don't try to extract images from `--json` output manually.
+- **Default output shows metrics** — cost, tps, tokens, latency are printed by default. Use `--quiet` to suppress them for piping.
