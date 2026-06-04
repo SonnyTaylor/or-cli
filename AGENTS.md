@@ -37,6 +37,7 @@ or-cli/
 │   │   ├── cache.ts          # Cache stats + clear
 │   │   ├── chat.ts           # Send messages, --save for images
 │   │   ├── compare.ts        # Side-by-side model comparison
+│   │   ├── config.ts         # View/set per-modality default models
 │   │   ├── cost.ts           # Spending breakdown from history
 │   │   ├── credits.ts        # Account balance
 │   │   ├── doctor.ts         # Config + connectivity diagnostics
@@ -124,8 +125,24 @@ This project runs on **Bun**, not Node. Key differences that have bitten us:
 ### Config
 
 - **Location:** `~/.or-cli/config.json`
-- **Keys:** `openrouterApiKey`, `artificialAnalysisApiKey`, `defaultModel`, `cacheTtlMs`
+- **Keys:** `openrouterApiKey`, `artificialAnalysisApiKey`, `defaultModel`, `defaultModels`, `cacheTtlMs`
 - **Env vars override:** `OPENROUTER_API_KEY`, `ARTIFICIAL_ANALYSIS_API_KEY`
+
+**Per-modality defaults:**
+```bash
+or config --set-image google/gemini-2.5-flash-image  # Default for image gen
+or config --set-vision google/gemini-2.5-flash       # Default when --image used
+or config --set-text deepseek/deepseek-v4-flash      # Default for text prompts
+or config --clear image                               # Clear a default
+or config --show                                      # View all config
+```
+
+When `or chat` is called without `-m`, it picks the default based on input:
+- `--image` flag → uses `vision` default
+- `--audio` flag → uses `audio` default
+- `--video` flag → uses `video` default
+- Otherwise → uses `text` default
+- Falls back to `defaultModel` (global), then `openai/gpt-4o-mini`
 
 ### Output Formats
 
