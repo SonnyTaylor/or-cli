@@ -12,6 +12,8 @@ import { providersCommand } from "./commands/providers";
 import { creditsCommand } from "./commands/credits";
 import { rankingsCommand } from "./commands/rankings";
 import { versionCommand } from "./commands/version";
+import { doctorCommand } from "./commands/doctor";
+import { costCommand } from "./commands/cost";
 
 const program = new Command();
 
@@ -33,5 +35,7 @@ program.addCommand(providersCommand());
 program.addCommand(creditsCommand());
 program.addCommand(rankingsCommand());
 program.addCommand(versionCommand());
+program.addCommand(doctorCommand());
+program.addCommand(costCommand());
 
 program.parse();

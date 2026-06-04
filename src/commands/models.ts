@@ -39,6 +39,7 @@ interface FilterOptions extends GlobalOptions {
   benchmarks?: boolean;
   param?: string[];
   expiring?: boolean;
+  new?: boolean;
   tilde?: boolean;
 }
 
@@ -58,6 +59,7 @@ export function modelsCommand(): Command {
     .option("-s, --sort <field>", "Sort by: price, context, name, created, usage, rank", "name")
     .option("-n, --limit <n>", "Max results", parseInt)
     .option("--expiring", "Only models with an expiration date (going away soon)")
+    .option("--new", "Only models added in the last 30 days")
     .option("--tilde", "Include ~ prefix 'latest' alias models")
     .option("--benchmarks", "Include AA benchmark scores (requires AA API key)")
     .option("--json", "Output as JSON")
@@ -106,6 +108,12 @@ export function modelsCommand(): Command {
         // Filter expiring models
         if (opts.expiring) {
           models = models.filter((m) => m.expiration_date);
+        }
+
+        // Filter new models (added in last 30 days)
+        if (opts.new) {
+          const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+          models = models.filter((m) => m.created && m.created > thirtyDaysAgo);
         }
 
         // Filter out ~ prefix 'latest' aliases by default
