@@ -33,6 +33,7 @@ or chat "transcribe" --audio recording.wav -m <model-id>  # Audio
 # Benchmarks
 or benchmarks --type llm --sort coding -n 10  # Best coders
 or benchmarks --type text-to-image --sort score -n 5  # Best image gen
+or benchmarks --type image-editing --or -n 10  # With OpenRouter IDs
 
 # Providers & Endpoints
 or endpoints <model-id>             # Per-provider uptime/latency

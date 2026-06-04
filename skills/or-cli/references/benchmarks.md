@@ -56,9 +56,20 @@ or benchmarks --type text-to-video --sort score -n 5
 
 `score`, `coding`, `intelligence`, `math`, `speed`, `ttft`, `price`, `name`
 
+## Cross-Referencing with OpenRouter
+
+Use `--or` to see which benchmark models are available on OpenRouter:
+
+```bash
+or benchmarks --type image-editing --or -n 10   # Show OpenRouter IDs
+or benchmarks --type text-to-image --or -n 10   # Image gen with OR IDs
+or benchmarks --type llm --or -n 10             # LLMs with OR IDs
+```
+
+This adds an "OpenRouter ID" column showing the actual model ID to use with `or chat -m <id>`. Models not available on OpenRouter show `—`.
+
 ## Notes
 
-- **Benchmark model IDs ≠ OpenRouter model IDs.** Benchmarks come from Artificial Analysis which tracks models across many providers. A model like `black-forest-labs/flux-2-max` in benchmarks may not exist on OpenRouter. Always use `or models -t <type>` to find the actual OpenRouter model IDs.
 - ELO ratings are category-relative (1200 in image ≠ 1200 in video)
 - Speed varies by provider
 - Use `or models --benchmarks` to inline AA scores in model listings
