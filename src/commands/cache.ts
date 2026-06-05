@@ -8,6 +8,7 @@ export function cacheCommand(): Command {
     .description("Manage response cache")
     .option("--stats", "Show cache statistics")
     .option("--clear", "Clear all cached data")
+    .option("--quiet", "Suppress non-error output")
     .action((opts) => {
       if (opts.clear) {
         const count = clearCache();

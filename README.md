@@ -1,187 +1,109 @@
 # or-cli
 
-A CLI for [OpenRouter](https://openrouter.ai) — search models, send messages, view benchmarks, and more. Designed for both humans and AI agents.
+A CLI for [OpenRouter](https://openrouter.ai) — the full API surface from the terminal. Chat, generate images/video/audio, embed text, transcribe speech, rerank documents, and discover models. Designed for both humans and AI agents.
 
 ## Installation
 
 ```bash
-# Clone the repo
 git clone https://github.com/SonnyTaylor/or-cli.git
 cd or-cli
-
-# Install dependencies
 bun install
-
-# Install globally (makes `or` command available everywhere)
 bun install -g .
-```
-
-After global install, run `or` from anywhere:
-
-```bash
-or --help
-or models --tools --sort price -n 5
 ```
 
 ## Quick Start
 
 ```bash
-# Set up your API keys
+# Set up API keys
 or auth --or-key sk-or-v1-...
-or auth --aa-key aa_...  # Optional: for benchmark data
 
-# Find cheap models with tool support
+# Ask a question
+or ask "Explain monads" -m deepseek/deepseek-v4-flash
+
+# Generate an image
+or create image "A mountain logo" --save logo.png
+
+# Transcribe audio
+or transcribe recording.mp3
+
+# Find models
 or models --tools --sort price -n 5
-
-# Chat with a model
-or chat "Explain monads" -m deepseek/deepseek-v4-flash
-
-# Compare models side-by-side
-or compare deepseek/deepseek-v4-flash openai/gpt-4o-mini
-
-# View benchmarks
-or benchmarks --type llm --sort coding -n 10
 ```
 
 ## Commands
 
+### Analysis & Conversation
 | Command | Description |
 |---------|-------------|
-| `or auth` | Manage API keys (OpenRouter + Artificial Analysis) |
-| `or models` | List, search, and filter 370+ models |
-| `or show <id>` | Detailed model info with price ranges |
-| `or compare <id> <id>` | Side-by-side model comparison |
-| `or chat <message>` | Send messages to any model (supports images, audio, video) |
-| `or endpoints <id>` | Per-provider uptime, latency, quantization |
-| `or providers` | List providers with datacenter locations |
-| `or benchmarks` | AA benchmark data (6 categories, 509+ models) |
-| `or rankings` | Daily token usage rankings for top models |
-| `or credits` | Show account credits and usage |
-| `or history` | View/search chat history |
-| `or cache` | Manage response cache |
+| `or ask` | One-shot Q&A with multimodal inputs (image, audio, video, PDF) |
+| `or chat` | Multi-turn conversations with persistent context |
 
-## Skills for AI Agents
+### Generation
+| Command | Description |
+|---------|-------------|
+| `or create image` | Image generation from text prompts |
+| `or create video` | Video generation (async — submits, polls, downloads) |
+| `or create audio` | Text-to-speech with voice selection |
 
-Install companion skills for your coding agent:
+### Processing
+| Command | Description |
+|---------|-------------|
+| `or embed` | Text/multimodal embeddings |
+| `or transcribe` | Speech-to-text transcription |
+| `or rerank` | Document reranking by relevance |
 
-```bash
-# From the project root
-npx skills add . -g -y
-```
+### Discovery
+| Command | Description |
+|---------|-------------|
+| `or models` | Search, filter, and list 370+ models |
+| `or show` | Detailed model info with price ranges |
+| `or compare` | Side-by-side model comparison |
+| `or benchmarks` | AA benchmark data (LLM, image, video, TTS) |
+| `or rankings` | Daily token usage rankings |
+| `or providers` | Provider datacenter info |
+| `or endpoints` | Per-provider uptime, latency, pricing |
 
-This installs 5 skills to `~/.agents/skills/` and symlinks them to your agent's skills directory:
-
-| Skill | When it activates |
-|-------|-------------------|
-| `or-models` | Finding, comparing, filtering models |
-| `or-chat` | Sending messages, getting completions |
-| `or-multimodal` | Analyzing images, transcribing audio, summarizing video |
-| `or-benchmarks` | Querying quality benchmarks, ELO ratings |
-| `or-image-gen` | Image generation, editing, and understanding |
-
-**No hardcoded model names** — everything is live-queried.
-
-## Model Filtering
-
-```bash
-# By type
-or models -t text|image|vision|embedding|audio|audio-gen|video|rerank|transcription
-
-# By capability
-or models --tools --reasoning --vision --free
-
-# By parameters
-or models --param structured_outputs tools
-
-# By price/context
-or models --max-cost 1 -c 128000
-
-# By provider
-or models -p deepseek
-
-# Sort options
-or models --sort price|context|name|created|usage|rank
-
-# Special filters
-or models --expiring        # Models going away soon
-or models --tilde           # Include ~ prefix "latest" aliases
-```
-
-## Multimodal Inputs
-
-Send images, audio, and video to compatible models:
-
-```bash
-# Image analysis
-or chat "What's in this image?" --image photo.jpg -m google/gemini-2.5-flash
-
-# Audio transcription
-or chat "Transcribe this" --audio recording.wav -m google/gemini-2.5-flash
-
-# Video summarization
-or chat "Summarize this video" --video clip.mp4 -m google/gemini-2.5-flash
-```
-
-## Reasoning
-
-Control reasoning effort and view thinking output:
-
-```bash
-or chat "Solve this" -m deepseek/deepseek-v4-flash --reasoning-effort high --show-reasoning
-```
-
-## Benchmarks
-
-Powered by [Artificial Analysis](https://artificialanalysis.ai):
-
-```bash
-# LLM benchmarks (15 evaluations)
-or benchmarks --type llm --sort coding -n 10
-or benchmarks --type llm --detailed  # All 15 columns
-
-# Media benchmarks (ELO ratings)
-or benchmarks --type text-to-image
-or benchmarks --type image-editing
-or benchmarks --type text-to-speech
-or benchmarks --type text-to-video
-or benchmarks --type image-to-video
-```
+### System & Account
+| Command | Description |
+|---------|-------------|
+| `or auth` | API key management |
+| `or config` | Default models, cache TTL, insecure mode |
+| `or credits` | Account balance |
+| `or cost` | Spending breakdown |
+| `or history` | Chat history |
+| `or conversations` | Conversation management |
+| `or cache` | Cache stats and clear |
+| `or doctor` | Connectivity diagnostics |
+| `or version` | Version and environment info |
 
 ## Agent-Friendly Features
 
+Every command supports:
 - `--json` — Machine-readable JSON output
-- `--md` — Markdown tables
-- `--quiet` — Response text only (for piping)
-- `--no-stream` — Wait for full response
-- `--no-log` — Don't save to history
+- `--quiet` — Suppress non-essential output
 - `--no-cache` — Bypass cache, fetch fresh data
-- Deterministic exit codes
 
-## API Keys
+Additional flags on `or ask` / `or chat`:
+- `--no-stream` — Wait for full response (default for non-TTY)
+- `--no-log` — Don't save to history
+- `--exacto` — Quality-first provider routing
+- `--server-cache` — Free cached responses
+- `--heal` — Auto-fix malformed JSON
 
-Get your keys:
-- **OpenRouter**: https://openrouter.ai/keys
-- **Artificial Analysis**: https://artificialanalysis.ai/login
+## Skills for AI Agents
 
 ```bash
-# Interactive setup
-or auth
-
-# Direct setup
-or auth --or-key sk-or-v1-...
-or auth --aa-key aa_...
-
-# Environment variables also work
-export OPENROUTER_API_KEY=sk-or-v1-...
-export ARTIFICIAL_ANALYSIS_API_KEY=aa_...
+npx skills add . -g -y
 ```
+
+Installs a single consolidated `or-cli` skill with references for all commands.
 
 ## Tech Stack
 
-- **Runtime**: [Bun](https://bun.sh)
-- **Language**: TypeScript
-- **CLI Framework**: [Commander.js](https://github.com/tj/commander.js)
-- **APIs**: OpenRouter, Artificial Analysis
+- **Runtime:** [Bun](https://bun.sh)
+- **Language:** TypeScript
+- **CLI Framework:** [Commander.js](https://github.com/tj/commander.js)
+- **APIs:** OpenRouter, Artificial Analysis
 
 ## License
 

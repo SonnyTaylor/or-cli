@@ -21,6 +21,7 @@ export function historyCommand(): Command {
     .option("-n, --limit <n>", "Number of entries", parseInt, 20)
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
+    .option("--quiet", "Suppress non-error output")
     .action((opts: GlobalOptions & { limit?: number }) => {
       const entries = readHistory(opts.limit);
       const format = getFormat(opts);

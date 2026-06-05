@@ -4,7 +4,7 @@ Instructions for AI agents working on `or-cli`.
 
 ## What This Is
 
-A CLI tool for querying OpenRouter (AI model marketplace) and Artificial Analysis (independent benchmarks). Lets users search models, send chat messages, view benchmarks, compare models, and generate images — all from the terminal.
+A CLI tool for the full OpenRouter API surface — chat, image/video/audio generation, embeddings, transcription, reranking, and model discovery — plus Artificial Analysis benchmarks. All from the terminal.
 
 **Runtime:** Bun (not Node.js — this matters, see Gotchas)  
 **Language:** TypeScript (ESM, `"type": "module"`)  
@@ -32,52 +32,112 @@ or-cli/
 ├── src/
 │   ├── cli.ts                # Registers all commands with Commander
 │   ├── commands/             # One file per command
+│   │   ├── ask.ts            # One-shot Q&A (no conversation)
 │   │   ├── auth.ts           # API key management
 │   │   ├── benchmarks.ts     # AA benchmark queries
 │   │   ├── cache.ts          # Cache stats + clear
-│   │   ├── chat.ts           # Send messages, --save for images
+│   │   ├── chat.ts           # Multi-turn conversations
 │   │   ├── compare.ts        # Side-by-side model comparison
 │   │   ├── config.ts         # View/set per-modality default models
+│   │   ├── conversations.ts  # Conversation management (list, view, delete)
 │   │   ├── cost.ts           # Spending breakdown from history
+│   │   ├── create.ts         # Generation: image, video, audio (subcommands)
 │   │   ├── credits.ts        # Account balance
 │   │   ├── doctor.ts         # Config + connectivity diagnostics
+│   │   ├── embed.ts          # Text/multimodal embeddings
 │   │   ├── endpoints.ts      # Per-provider details
 │   │   ├── history.ts        # Chat history (JSONL)
 │   │   ├── models.ts         # Model search/filter/list (--new flag)
 │   │   ├── providers.ts      # Provider datacenter info
 │   │   ├── rankings.ts       # Daily token usage
+│   │   ├── rerank.ts         # Document reranking
 │   │   ├── show.ts           # Single model details
+│   │   ├── transcribe.ts     # Speech-to-text (audio transcription)
+│   │   ├── tts.ts            # DEPRECATED — use `create audio` instead
 │   │   └── version.ts        # Version + environment info
 │   └── lib/
 │       ├── artificial-analysis.ts  # AA API client
 │       ├── cache.ts                # File-based cache (~/.or-cli/cache/)
+│       ├── chat-core.ts            # Shared: message building, streaming, history, stats
 │       ├── config.ts               # Config (~/.or-cli/config.json)
+│       ├── conversations.ts        # Conversation persistence (JSONL per thread)
+│       ├── fetch.ts                # fetch wrapper with TLS error handling
 │       ├── format.ts               # Output formatting helpers
 │       ├── history.ts              # JSONL history logging
 │       ├── openrouter.ts           # OR API client + model helpers
+│       ├── pricing-fallbacks.ts    # Hardcoded pricing for models the API under-reports
 │       └── types.ts                # TypeScript interfaces
 ├── skills/                   # AI agent skill (installed via npx skills)
 │   └── or-cli/
 │       ├── SKILL.md          # Main skill file
 │       └── references/       # Detailed docs per topic
+├── UX_OVERHAUL.md            # Design spec for the v0.5.0 UX redesign
 ├── package.json
 └── tsconfig.json
 ```
 
 ## Versioning
 
-We use semver. Current: **v0.3.0**
+We use semver. Current: **v0.5.0**
 
 **Bump the version in both places when releasing:**
-1. `package.json` → `"version": "0.2.0"`
-2. `src/cli.ts` → `.version("0.2.0")`
+1. `package.json` → `"version": "0.5.0"`
+2. `src/cli.ts` → `.version("0.5.0")`
 
 The `or version` command reads from `package.json` at runtime.
 
 **Version bump guidelines:**
-- Patch (0.2.x): Bug fixes, small tweaks
+- Patch (0.5.x): Bug fixes, small tweaks
 - Minor (0.x.0): New commands, new flags, new API integrations
 - Major (x.0.0): Breaking changes to CLI interface or output format
+
+## Command Architecture
+
+Commands are organized by **user intent**, not by API endpoint:
+
+### Analysis & Conversation
+| Command | Purpose |
+|---------|---------|
+| `or ask` | One-shot Q&A (no persistence). Supports `--image`, `--audio`, `--video`, `--pdf` |
+| `or chat` | Multi-turn conversations. `--conversation`, `--continue`, `--resume` |
+
+### Generation
+| Command | Purpose |
+|---------|---------|
+| `or create image` | Image generation (`--save`, `--aspect-ratio`, `--style`) |
+| `or create video` | Video generation (async: submits job, polls, downloads). `--resolution`, `--duration`, `--frame-image` |
+| `or create audio` | TTS (`--voice`, `--format`, `--speed`, `--list-models`, `--list-voices`) |
+
+### Processing
+| Command | Purpose |
+|---------|---------|
+| `or embed` | Text/multimodal embeddings (`--dimensions`, `--image`, `--batch`, `--list-models`) |
+| `or transcribe` | Speech-to-text (`--language`, `--temperature`, `--output`) |
+| `or rerank` | Document reranking (`--top-n`, `--file`) |
+
+### Discovery
+| Command | Purpose |
+|---------|---------|
+| `or models` | Search/filter/list models |
+| `or show` | Single model details |
+| `or compare` | Side-by-side model comparison |
+| `or benchmarks` | AA benchmark queries |
+| `or rankings` | Daily token usage |
+| `or providers` | Provider datacenters |
+| `or endpoints` | Per-provider pricing/uptime |
+
+### System & Account
+| Command | Purpose |
+|---------|---------|
+| `or auth` | API key management |
+| `or config` | Default models, cache TTL, insecure mode |
+| `or credits` | Account balance |
+| `or cost` | Spending breakdown |
+| `or history` | Chat history |
+| `or cache` | Cache stats & clear |
+| `or conversations` | Conversation management |
+| `or doctor` | Connectivity diagnostics |
+| `or version` | Version info |
 
 ## Gotchas & Niche Stuff
 
@@ -106,13 +166,13 @@ This project runs on **Bun**, not Node. Key differences that have bitten us:
 
 2. **Per-image pricing** — Some models charge per image, not per token. Their `pricing.prompt` and `pricing.completion` are `"0"`, but `pricing.image` has the per-image-token price. The `isPerImagePriced()` and `getPerImagePrice()` helpers detect this.
 
-3. **`--quiet` only works on `or chat`** — `or models`, `or show`, `or benchmarks` don't support `--quiet`. Using it there causes an `error: unknown option` that gets hidden by `2>/dev/null`, making it look like empty output.
+3. **Benchmark model IDs ≠ OpenRouter IDs** — Artificial Analysis benchmarks show models from many providers. A model like `black-forest-labs/flux-2-max` in benchmarks might not exist on OpenRouter. Use `or benchmarks --or` to cross-reference, or `or models -t image` to find actual IDs.
 
-4. **Benchmark model IDs ≠ OpenRouter IDs** — Artificial Analysis benchmarks show models from many providers. A model like `black-forest-labs/flux-2-max` in benchmarks might not exist on OpenRouter. Use `or benchmarks --or` to cross-reference, or `or models -t image` to find actual IDs.
+4. **`/models/{id}/endpoints`** — Some models are hidden from `/models` but accessible via their endpoints. We use this for per-image pricing enrichment.
 
-5. **`/models/{id}/endpoints`** — Some models are hidden from `/models` but accessible via their endpoints. We use this for per-image pricing enrichment.
+5. **Image output format** — When a model generates an image, it's in `response.choices[0].message.images[0].image_url.url` as a base64 data URI, NOT in the standard `content` array. The `--save` flag handles extraction automatically.
 
-6. **Image output format** — When a model generates an image, it's in `response.choices[0].message.images[0].image_url.url` as a base64 data URI, NOT in the standard `content` array. The `--save` flag handles extraction automatically.
+6. **Video generation is async** — Unlike text/image, video gen uses a dedicated `POST /api/v1/videos` endpoint. Submit → poll → download. The `or create video` command handles this automatically with a spinner.
 
 7. **PDF support** — PDFs can be sent as local files (base64 encoded) or URLs. The `file` content type is used. Models that support files natively get the raw PDF; others get parsed text/images via Cloudflare AI or Mistral OCR.
 
@@ -121,6 +181,19 @@ This project runs on **Bun**, not Node. Key differences that have bitten us:
 9. **`:exacto` variant** — Appending `:exacto` to a model ID routes to providers with stronger tool-calling quality signals. Costs may be higher than default routing.
 
 10. **Server-side caching** — `--server-cache` enables OpenRouter's response caching. Cache hits are free (zero tokens charged). Identical requests (same model, messages, params) within TTL return cached responses.
+
+### chat-core.ts
+
+The `src/lib/chat-core.ts` module contains shared logic used by `ask`, `chat`, and `create`:
+
+- `buildContentParts()` — Builds multimodal content parts from file paths
+- `buildMessages()` — Builds the messages array with system prompt and history
+- `buildRequest()` — Builds the API request body (tools, plugins, modalities)
+- `handleStream()` / `handleNonStream()` — Streaming and non-streaming API handlers
+- `saveImage()` — Extracts and saves base64 images from responses
+- `logHistory()` / `printStats()` — History logging and stats output
+
+When adding new commands that talk to the chat completions API, use chat-core instead of reimplementing.
 
 ### Caching
 
@@ -141,11 +214,13 @@ This project runs on **Bun**, not Node. Key differences that have bitten us:
 or config --set-image google/gemini-2.5-flash-image  # Default for image gen
 or config --set-vision google/gemini-2.5-flash       # Default when --image used
 or config --set-text deepseek/deepseek-v4-flash      # Default for text prompts
+or config --set-video google/veo-3.1                 # Default for video gen
+or config --set-audio hexgrad/kokoro-82m             # Default for TTS
 or config --clear image                               # Clear a default
 or config --show                                      # View all config
 ```
 
-When `or chat` is called without `-m`, it picks the default based on input:
+When `or ask` or `or chat` is called without `-m`, it picks the default based on input:
 - `--image` flag → uses `vision` default
 - `--audio` flag → uses `audio` default
 - `--video` flag → uses `video` default
@@ -154,13 +229,13 @@ When `or chat` is called without `-m`, it picks the default based on input:
 
 ### Output Formats
 
-Every command supports:
+Most commands support:
 - `--json` — Machine-readable JSON
-- `--md` — Markdown table
+- `--md` — Markdown table (where applicable)
+- `--quiet` — Suppress non-essential output, return only the core result
 - Default — Styled terminal table with chalk colors
 
-`or chat` additionally supports:
-- `--quiet` — Only response text (for piping)
+`or ask` and `or chat` additionally support:
 - `--no-stream` — Wait for full response (default for non-TTY)
 - `--save <path>` — Save generated images to file
 
@@ -181,6 +256,8 @@ The `skills/or-cli/` directory is an AI agent skill installed via `npx skills ad
 
 Chat history is stored in `~/.or-cli/history.jsonl` (one JSON object per line). Each entry includes model, tokens, cost estimate, latency, and the full prompt/response.
 
+Conversations are stored separately in `~/.or-cli/conversations/` as individual JSONL files.
+
 ## Common Tasks
 
 ### Adding a New Command
@@ -189,7 +266,7 @@ Chat history is stored in `~/.or-cli/history.jsonl` (one JSON object per line). 
 2. Export a function that returns a `Command`
 3. Import and register in `src/cli.ts`
 4. Add types to `src/lib/types.ts` if needed
-5. Bump minor version
+5. Bump minor version in `package.json` + `src/cli.ts`
 
 ### Adding a New API
 
@@ -224,10 +301,20 @@ or models --no-cache
 |----------|----------|
 | `GET /models` | Main model list (text, vision, etc.) |
 | `GET /models?output_modalities=image` | Image generation models |
+| `GET /models?output_modalities=video` | Video generation models |
+| `GET /models?output_modalities=speech` | TTS models |
 | `GET /embeddings/models` | Embedding models |
 | `GET /models/{id}/endpoints` | Per-provider pricing/uptime |
 | `GET /providers` | Provider list with datacenters |
-| `POST /chat/completions` | Chat/inference |
+| `POST /chat/completions` | Chat/inference (text, vision, image gen) |
+| `POST /audio/speech` | Text-to-speech |
+| `POST /audio/transcriptions` | Speech-to-text |
+| `POST /embeddings` | Generate embeddings |
+| `POST /rerank` | Document reranking |
+| `POST /videos` | Submit video generation job (async) |
+| `GET /videos/{jobId}` | Poll video job status |
+| `GET /videos/{jobId}/content` | Download generated video |
+| `GET /videos/models` | List video generation models |
 | `GET /credits` | Account balance |
 | `GET /datasets/rankings-daily` | Daily token usage |
 
@@ -259,17 +346,29 @@ or doctor
 or auth --show
 or models -t text -n 3
 or models -t image -n 3
-or models --new -n 5
 or show google/gemini-2.5-flash
 or benchmarks --type llm -n 3
-or benchmarks --type image-editing --or -n 3
 or cost
 or credits
 or history list
 or cache stats
+or conversations list
 
-# New features (v0.3.0)
-or chat --help | grep -E '(pdf|web-search|exacto|server-cache|heal)'
+# Generation (v0.5.0)
+or ask "What's 2+2?"
+or ask --help | grep -E '(image|audio|video|pdf)'
+or create image --help
+or create video --help
+or create audio --help
+
+# Processing (v0.5.0)
+or embed "Hello world" --dimensions 64
+or embed --list-models
+or transcribe --help
+or rerank "query" "doc1" "doc2"
+
+# Chat features
+or chat --help | grep -E '(conversation|continue|resume)'
 ```
 
 ## PR/Commit Conventions
@@ -278,33 +377,3 @@ or chat --help | grep -E '(pdf|web-search|exacto|server-cache|heal)'
 - Bump version in `package.json` + `src/cli.ts` for feature additions
 - Run `npx skills add . -g -y` after skill changes
 - Don't commit `node_modules/`, `bun.lock`, cache files, or API keys
-
-## v0.3.0 Features (OpenRouter API additions)
-
-### PDF Support (`--pdf`)
-- Send PDF files via URL or base64-encoded local files
-- Works with any model (server-side parsing via Cloudflare AI or Mistral OCR)
-- `--pdf-engine` flag to select processing engine
-
-### Server Tools
-- `--web-search` — Model can search the web for current info
-- `--web-search-engine` — Select search backend (auto, exa, firecrawl, parallel)
-- `--web-search-max` — Limit results per search
-- `--web-fetch` — Model can fetch content from URLs
-- `--datetime` — Model gets current date/time
-- All server tools are model-decided (model chooses when to call them)
-
-### Exacto Variant (`--exacto`)
-- Quality-first provider routing via `:exacto` suffix or `--exacto` flag
-- Useful for agentic workflows where tool-calling reliability matters
-- `or show` now displays exacto tip for multi-provider models
-
-### Server-Side Response Caching (`--server-cache`)
-- Enable OpenRouter's response caching via `X-OpenRouter-Cache` header
-- Cache hits are free (zero tokens charged)
-- `--server-cache-ttl` to set custom TTL (1-86400 seconds)
-
-### Response Healing (`--heal`)
-- Auto-fix malformed JSON responses from models
-- Handles missing brackets, trailing commas, markdown wrappers, mixed text
-- Only works with non-streaming requests

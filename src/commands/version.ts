@@ -30,8 +30,15 @@ function getRuntime(): string {
 export function versionCommand(): Command {
   return new Command("version")
     .description("Show version and environment info")
-    .action(() => {
+    .option("--quiet", "Suppress non-error output")
+    .action((opts) => {
       const version = getPackageVersion();
+
+      if (opts.quiet) {
+        console.log(version);
+        return;
+      }
+
       const commit = getGitCommit();
       const runtime = getRuntime();
 

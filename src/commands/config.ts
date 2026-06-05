@@ -47,6 +47,7 @@ export function configCommand(): Command {
     .option("--clear <modality>", "Clear default for a modality (text/image/vision/audio/video/global)")
     .option("--insecure", "Disable SSL certificate verification (for corporate networks with DPI)")
     .option("--no-insecure", "Re-enable SSL certificate verification")
+    .option("--quiet", "Suppress non-error output")
     .action((opts) => {
       const config = getConfig();
       let updated = false;

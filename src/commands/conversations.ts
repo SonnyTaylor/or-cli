@@ -20,6 +20,7 @@ export function conversationsCommand(): Command {
     .option("-n, --limit <n>", "Max results", parseInt, 20)
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
+    .option("--quiet", "Suppress non-error output")
     .action((opts: GlobalOptions & { limit?: number }) => {
       const convs = listConversations(opts.limit);
       const format = getFormat(opts);

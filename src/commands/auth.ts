@@ -10,6 +10,7 @@ export function authCommand(): Command {
     .option("--aa-key <key>", "Set Artificial Analysis API key directly")
     .option("--show", "Show currently configured keys (masked)")
     .option("--remove <provider>", "Remove a key (openrouter | artificial-analysis)")
+    .option("--quiet", "Suppress non-error output")
     .action(async (opts) => {
       // --show: display masked keys
       if (opts.show) {

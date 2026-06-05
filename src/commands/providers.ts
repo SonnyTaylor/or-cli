@@ -26,6 +26,7 @@ export function providersCommand(): Command {
     .option("--search <query>", "Search provider names")
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
+    .option("--quiet", "Suppress non-error output")
     .option("--no-cache", "Bypass cache")
     .action(async (opts: GlobalOptions & {
       region?: string;
@@ -36,7 +37,7 @@ export function providersCommand(): Command {
       const format = getFormat(opts);
       const cacheTtl = getConfig().cacheTtlMs;
 
-      const spinner = ora("Fetching providers...").start();
+      const spinner = opts.quiet ? null : ora("Fetching providers...").start();
 
       try {
         let providers: Provider[];
@@ -79,7 +80,7 @@ export function providersCommand(): Command {
         // Sort alphabetically
         providers.sort((a, b) => a.name.localeCompare(b.name));
 
-        spinner.stop();
+        spinner?.stop();
 
         if (providers.length === 0) {
           console.log(chalk.dim("No providers match your filters."));
@@ -107,7 +108,7 @@ export function providersCommand(): Command {
           console.log(chalk.dim(`\n  ${providers.length} providers`));
         }
       } catch (err) {
-        spinner.fail("Failed to fetch providers");
+        spinner?.fail("Failed to fetch providers");
         console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }

@@ -64,12 +64,13 @@ export function modelsCommand(): Command {
     .option("--benchmarks", "Include AA benchmark scores (requires AA API key)")
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
+    .option("--quiet", "Suppress non-error output")
     .option("--no-cache", "Bypass cache, fetch fresh data")
     .action(async (query: string | undefined, opts: FilterOptions) => {
       const apiKey = requireOpenRouterKey();
       const format = getFormat(opts);
 
-      const spinner = ora("Fetching models...").start();
+      const spinner = opts.quiet ? null : ora("Fetching models...").start();
 
       try {
         // For usage/rank sorting, we need to fetch with the sort param from the API
@@ -138,14 +139,14 @@ export function modelsCommand(): Command {
               const aaModels = await fetchLLMBenchmarks(aaKey, opts.noCache);
               benchmarks = new Map(aaModels.map((m) => [m.slug, m]));
             } catch (err) {
-              spinner.warn(`Could not fetch benchmarks: ${err}`);
+              spinner?.warn(`Could not fetch benchmarks: ${err}`);
             }
           } else {
-            spinner.warn("No AA API key set. Run `or auth --aa-key <key>` to enable benchmarks.");
+            spinner?.warn("No AA API key set. Run `or auth --aa-key <key>` to enable benchmarks.");
           }
         }
 
-        spinner.stop();
+        spinner?.stop();
 
         if (models.length === 0) {
           console.log(chalk.dim("No models match your filters."));
@@ -187,13 +188,21 @@ export function modelsCommand(): Command {
           return base;
         });
 
+        // Quiet: output just model IDs
+        if (opts.quiet && format === "table") {
+          for (const m of models) {
+            console.log(m.id);
+          }
+          return;
+        }
+
         outputTable(headers, rows, format);
 
-        if (format === "table") {
+        if (format === "table" && !opts.quiet) {
           console.log(chalk.dim(`\n  ${models.length} models shown`));
         }
       } catch (err) {
-        spinner.fail("Failed to fetch models");
+        spinner?.fail("Failed to fetch models");
         error(formatNetworkError(err));
         process.exit(1);
       }

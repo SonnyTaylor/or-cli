@@ -19,6 +19,7 @@ export function rerankCommand(): Command {
     .option("-f, --file <path>", "Read documents from file (one per line)")
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
+    .option("--quiet", "Suppress non-error output")
     .action(async (query: string, docsArg: string[], opts: GlobalOptions & { model: string; topN?: number; file?: string }) => {
       const apiKey = requireOpenRouterKey();
       const format = getFormat(opts);
@@ -61,16 +62,16 @@ export function rerankCommand(): Command {
       }
 
       // ── Validate model ────────────────────────────────────────────────
-      const spinner = ora(`Reranking ${documents.length} document(s)...`).start();
+      const spinner = opts.quiet ? null : ora(`Reranking ${documents.length} document(s)...`).start();
 
       try {
         // Quick check that the model exists and is a reranker
         const models = await fetchModels(apiKey);
         const modelInfo = models.find((m) => m.id === opts.model);
         if (!modelInfo) {
-          spinner.warn(`Model not found: ${opts.model}`);
+          spinner?.warn(`Model not found: ${opts.model}`);
         } else if (!isRerankModel(modelInfo)) {
-          spinner.warn(`${opts.model} does not appear to be a rerank model`);
+          spinner?.warn(`${opts.model} does not appear to be a rerank model`);
         }
 
         const response = await rerank(apiKey, {
@@ -80,7 +81,7 @@ export function rerankCommand(): Command {
           top_n: opts.topN,
         });
 
-        spinner.stop();
+        spinner?.stop();
 
         if (format === "json") {
           console.log(JSON.stringify(response, null, 2));
@@ -89,7 +90,7 @@ export function rerankCommand(): Command {
 
         printResults(response, format);
       } catch (err) {
-        spinner.fail("Rerank failed");
+        spinner?.fail("Rerank failed");
         console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }

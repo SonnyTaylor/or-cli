@@ -83,4 +83,4 @@ or benchmarks --type llm           # Styled terminal table
 - ELO ratings are category-relative (1200 in image ≠ 1200 in video)
 - Speed varies by provider
 - Use `or models --benchmarks` to inline AA scores in model listings
-- `--quiet` is NOT supported on benchmarks — use `--json` for piping
+- `--json` for machine-readable output, `--quiet` for minimal output

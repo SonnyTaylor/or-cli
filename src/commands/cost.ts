@@ -25,6 +25,7 @@ export function costCommand(): Command {
     .option("-n, --limit <n>", "Max rows to show", parseInt)
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
+    .option("--quiet", "Suppress non-error output")
     .action((opts: GlobalOptions & { byDay?: boolean; limit?: number }) => {
       const format = getFormat(opts);
       const entries = readHistory();

@@ -56,6 +56,7 @@ export function endpointsCommand(): Command {
     .option("--sort <field>", "Sort by: uptime, latency, throughput, price, provider", "uptime")
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
+    .option("--quiet", "Suppress non-error output")
     .option("--quantization <type>", "Filter by quantization (fp8, fp4, bf16, unknown)")
     .option("--provider <name>", "Filter by provider name")
     .option("--min-uptime <pct>", "Min uptime % (1d)", parseFloat)
@@ -76,7 +77,7 @@ export function endpointsCommand(): Command {
       const apiKey = requireOpenRouterKey();
       const format = getFormat(opts);
 
-      const spinner = ora(`Fetching endpoints for ${modelId}...`).start();
+      const spinner = opts.quiet ? null : ora(`Fetching endpoints for ${modelId}...`).start();
 
       try {
         const res = await apiFetch(
@@ -86,7 +87,7 @@ export function endpointsCommand(): Command {
 
         if (!res.ok) {
           const body = await res.text().catch(() => "");
-          spinner.fail(`Failed: ${res.status}`);
+          spinner?.fail(`Failed: ${res.status}`);
           console.error(body);
           process.exit(1);
         }
@@ -95,7 +96,7 @@ export function endpointsCommand(): Command {
         let endpoints = data.data.endpoints;
 
         if (!endpoints || endpoints.length === 0) {
-          spinner.fail(`No endpoints found for ${modelId}`);
+          spinner?.fail(`No endpoints found for ${modelId}`);
           process.exit(1);
         }
 
@@ -133,7 +134,7 @@ export function endpointsCommand(): Command {
         // Sort
         endpoints = sortEndpoints(endpoints, opts.sort ?? "uptime");
 
-        spinner.stop();
+        spinner?.stop();
 
         if (format === "json") {
           console.log(JSON.stringify({ model: data.data, endpoints }, null, 2));
@@ -185,7 +186,7 @@ export function endpointsCommand(): Command {
           }
         }
       } catch (err) {
-        spinner.fail("Failed to fetch endpoints");
+        spinner?.fail("Failed to fetch endpoints");
         console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }

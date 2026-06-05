@@ -1,110 +1,77 @@
-# Image Models with `or`
+# Image Generation with `or create image`
 
-## Finding the Right Model Type
+Generate images from text prompts using OpenRouter's image generation models.
 
-| Task | Filter | What it means |
-|------|--------|---------------|
-| Generate images from text | `or models -t image` | Text/image in, image out |
-| Edit existing images | `or models -t image` | Same models (most do both) |
-| Understand/analyze images | `or models --vision` | Image in, text out |
-| Extract text (OCR) | `or models --vision` | Any vision model |
+## Basic Usage
 
-## Pricing Types
+```bash
+# Generate and save
+or create image "A logo of a mountain" --save logo.png
 
-Image models have two pricing types:
+# Specify a model
+or create image "A red circle" --save circle.png -m black-forest-labs/flux.2-pro
 
-| Type | Display | Example | How it works |
-|------|---------|---------|---------------|
-| Token-based | `$2.38` | GPT-5 Image Mini | Charged per 1M tokens (input + output) |
-| Per-image | `$0.04/img` | Recraft V4.1 | Fixed price per generated image |
+# With options
+or create image "A landscape" --save landscape.png --aspect-ratio 16:9
+```
 
-Per-image models (Recraft, xAI Grok, Microsoft MAI, Sourceful) are often cheaper for single images but don't support token-based cost optimization.
+## Options
+
+| Flag | Purpose |
+|------|---------|
+| `-m, --model <id>` | Image generation model (auto-detected if omitted) |
+| `--save <path>` | Output file path (default: `output.png`) |
+| `--aspect-ratio <ratio>` | Aspect ratio (e.g. 16:9, 1:1) |
+| `--image-size <size>` | Image size (e.g. 1024x1024) |
+| `--style <style>` | Image style |
+| `--json` | Output metadata as JSON |
+| `--quiet` | Suppress non-error output |
+
+## Finding Models
+
+```bash
+or models -t image                  # All image generation models
+or show black-forest-labs/flux.2-pro  # Check capabilities
+or benchmarks --type text-to-image --sort score -n 10  # Best quality
+```
 
 ## Output Formats
 
-Most models return raster images (PNG/JPEG), but **Recraft vector models return SVG**:
+Most models return PNG/JPEG, but **Recraft vector models return SVG**:
 
-| Model | Output | Use `--save` with |
-|-------|--------|-------------------|
+| Model | Output | Save as |
+|-------|--------|---------|
 | `recraft/recraft-v4-vector` | SVG | `.svg` |
 | `recraft/recraft-v4.1-vector` | SVG | `.svg` |
-| `recraft/recraft-v4-pro-vector` | SVG | `.svg` |
-| `recraft/recraft-v4.1-pro-vector` | SVG | `.svg` |
-| All other image models | PNG/JPEG | `.png` |
+| All other models | PNG/JPEG | `.png` |
 
-Vector models are ideal for logos, icons, and UI assets — output is infinitely scalable.
+The CLI auto-detects SVG output and adjusts the file extension.
 
-```bash
-# Image generation models (all 30+ models including Recraft, FLUX, xAI, etc.)
-or models -t image
+## Pricing
 
-# Vision models (understanding only, no generation)
-or models --vision
+Two pricing types:
 
-# Search for specific capabilities
-or models "image editing"
-or models "recraft"
-or models "flux"
-```
+| Type | Example | How it works |
+|------|---------|-------------|
+| Token-based | GPT-5 Image Mini | Charged per 1M tokens |
+| Per-image | Recraft V4.1 | Fixed price per image |
 
-## Checking Capabilities
+Check with `or show <model-id>`.
 
-Always verify before using an image model:
+## Agent Patterns
 
 ```bash
-or show openai/gpt-5-image-mini
-or show google/gemini-3.1-flash-image-preview
+# Generate and use in pipeline
+or create image "A flowchart" --save flowchart.png --json | jq -r '.output'
+
+# Silent generation
+or create image "A icon" --save icon.png --quiet
 ```
 
-## Quality Benchmarks
+## Notes
 
-```bash
-or benchmarks --type text-to-image --sort score -n 10
-or benchmarks --type image-editing --sort score -n 10
-```
-
-**Warning:** Benchmark model IDs (e.g. `black-forest-labs/flux-2-max`) are from Artificial Analysis and may not exist on OpenRouter. Always use `or models -t image` to get the actual available model IDs.
-
-## Common Pitfalls
-
-- **Vision ≠ Generation**: Vision models understand images (image→text). They don't create them.
-- **Modality format**: `text+image->text+image` = generates, `text+image->text` = vision only
-- **Free models**: Rate-limited. For production, prefer paid models.
-
-## Examples
-
-```bash
-# Generate and save image
-or chat "Generate a logo of a mountain" -m black-forest-labs/flux.2-pro --save logo.png --no-stream
-
-# Edit image and save
-or chat "Replace the window with a door" --image input.jpg -m black-forest-labs/flux.2-pro --save output.png --no-stream
-
-# Understand (text output only)
-or chat "Describe this photo" -m openai/gpt-4o --image photo.jpg --quiet
-
-# OCR
-or chat "Extract all text" -m xiaomi/mimo-v2.5 --image document.jpg --quiet
-```
-
-## Saving Generated Images
-
-Use `--save <path>` to save images directly to disk. The CLI automatically sets the required `modalities` parameter based on the model's capabilities:
-
-```bash
-or chat "Generate a red circle" -m black-forest-labs/flux.2-pro --save circle.png --no-stream
-```
-
-Output:
-```
-✓ Image saved to /path/to/circle.png (180KB)
-Sure, here's your red circle:
-
-  1313 tokens (8 in / 1305 out) • 224 tps • 5.8s • $0.0387 • black-forest-labs/flux.2-pro
-```
-
-The `--save` flag:
-- Auto-detects format from the model's output (PNG, JPEG, etc.)
-- Creates parent directories if needed
-- Shows file size in output
-- Works with `--quiet` (still saves, just suppresses text)
+- **Auto-detects model** if `--model` is omitted (picks the first available image model).
+- **Parent directories** are created automatically.
+- **SVG auto-detection** adjusts file extension for vector models.
+- **For image editing**, send an input image with `--image` on `or ask` and use an image editing model.
+- **For image analysis**, use `or ask --image` with a vision model.

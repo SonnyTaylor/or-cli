@@ -149,7 +149,7 @@ export function formatPricingDimension(
  * Ordered by relevance for display.
  */
 export function formatAllPricing(
-  pricing: Record<string, string | undefined>
+  pricing: Record<string, unknown>
 ): string[] {
   const order = [
     "prompt",
@@ -168,7 +168,7 @@ export function formatAllPricing(
   ];
   const lines: string[] = [];
   for (const key of order) {
-    const line = formatPricingDimension(key, pricing[key]);
+    const line = formatPricingDimension(key, pricing[key] as string | number | undefined);
     if (line) lines.push(line);
   }
   return lines;

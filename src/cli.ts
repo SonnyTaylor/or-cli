@@ -1,6 +1,8 @@
 import { Command } from "commander";
 import { authCommand } from "./commands/auth";
+import { askCommand } from "./commands/ask";
 import { chatCommand } from "./commands/chat";
+import { createCommand } from "./commands/create";
 import { modelsCommand } from "./commands/models";
 import { showCommand } from "./commands/show";
 import { compareCommand } from "./commands/compare";
@@ -16,7 +18,8 @@ import { doctorCommand } from "./commands/doctor";
 import { costCommand } from "./commands/cost";
 import { configCommand } from "./commands/config";
 import { conversationsCommand } from "./commands/conversations";
-import { ttsCommand } from "./commands/tts";
+import { embedCommand } from "./commands/embed";
+import { transcribeCommand } from "./commands/transcribe";
 import { rerankCommand } from "./commands/rerank";
 
 const program = new Command();
@@ -24,10 +27,12 @@ const program = new Command();
 program
   .name("or")
   .description("CLI for OpenRouter — search models, send messages, view benchmarks")
-  .version("0.4.0");
+  .version("0.5.0");
 
 program.addCommand(authCommand());
+program.addCommand(askCommand());
 program.addCommand(chatCommand());
+program.addCommand(createCommand());
 program.addCommand(modelsCommand());
 program.addCommand(showCommand());
 program.addCommand(compareCommand());
@@ -43,7 +48,8 @@ program.addCommand(doctorCommand());
 program.addCommand(costCommand());
 program.addCommand(configCommand());
 program.addCommand(conversationsCommand());
-program.addCommand(ttsCommand());
+program.addCommand(embedCommand());
+program.addCommand(transcribeCommand());
 program.addCommand(rerankCommand());
 
 program.parse();

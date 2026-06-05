@@ -137,6 +137,7 @@ function checkPlatform(): CheckResult {
 export function doctorCommand(): Command {
   return new Command("doctor")
     .description("Check CLI configuration and connectivity")
+    .option("--quiet", "Suppress non-error output")
     .action(async () => {
       console.log(chalk.bold("\n  or-cli doctor\n"));
 

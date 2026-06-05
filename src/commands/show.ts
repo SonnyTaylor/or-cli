@@ -38,12 +38,13 @@ export function showCommand(): Command {
     .argument("<model-id>", "Model ID (e.g. deepseek/deepseek-v4-flash)")
     .option("--benchmarks", "Include AA benchmark scores")
     .option("--json", "Output as JSON")
+    .option("--quiet", "Suppress non-error output")
     .option("--no-cache", "Bypass cache")
     .action(async (modelId: string, opts: GlobalOptions & { benchmarks?: boolean }) => {
       const apiKey = requireOpenRouterKey();
       const format = getFormat(opts);
 
-      const spinner = ora(`Fetching ${modelId}...`).start();
+      const spinner = opts.quiet ? null : ora(`Fetching ${modelId}...`).start();
 
       try {
         // Fetch model and endpoints in parallel
@@ -61,7 +62,7 @@ export function showCommand(): Command {
         const endpoints: Endpoint[] = endpointData?.endpoints ?? [];
 
         if (!model && endpoints.length === 0) {
-          spinner.fail(`Model not found: ${modelId}`);
+          spinner?.fail(`Model not found: ${modelId}`);
           console.log(
             chalk.dim(
               "Use `or models` to list available models, or `or models <query>` to search."
@@ -92,7 +93,7 @@ export function showCommand(): Command {
           } as ORModel);
 
         if (!model && endpoints.length > 0) {
-          spinner.warn(
+          spinner?.warn(
             `Not in /models list — found via endpoints (${endpoints.length} provider(s))`
           );
         }
@@ -107,12 +108,12 @@ export function showCommand(): Command {
               aaModel =
                 aaModels.find((bm) => bm.slug === m.id.split("/").pop()) ?? null;
             } catch (err) {
-              spinner.warn(`Could not fetch benchmarks: ${err}`);
+              spinner?.warn(`Could not fetch benchmarks: ${err}`);
             }
           }
         }
 
-        spinner.stop();
+        spinner?.stop();
 
         if (format === "json") {
           console.log(
@@ -328,7 +329,7 @@ export function showCommand(): Command {
           console.log("");
         }
       } catch (err) {
-        spinner.fail("Failed to fetch model");
+        spinner?.fail("Failed to fetch model");
         console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }

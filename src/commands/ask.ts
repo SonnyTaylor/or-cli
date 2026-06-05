@@ -4,6 +4,7 @@ import ora from "ora";
 import { requireOpenRouterKey, getDefaultModel } from "../lib/config";
 import { getFormat, error } from "../lib/format";
 import { formatNetworkError } from "../lib/fetch";
+
 import type { ChatContentPart } from "../lib/types";
 import {
   buildContentParts,
@@ -16,19 +17,13 @@ import {
   saveImage,
   logHistory,
   printStats,
+  readStdin,
 } from "../lib/chat-core";
-import {
-  createConversation,
-  appendConversation,
-  loadConversation,
-  getLastConversationId,
-  toMessages,
-} from "../lib/conversations";
 
-export function chatCommand(): Command {
-  const cmd = new Command("chat")
-    .description("Send a message in a conversation (multi-turn chat)")
-    .argument("[message...]", "Message to send")
+export function askCommand(): Command {
+  const cmd = new Command("ask")
+    .description("Ask a question and get a one-shot answer")
+    .argument("[prompt...]", "Your question or prompt")
     .option("-m, --model <model>", "Model to use")
     .option("-s, --system <prompt>", "System prompt")
     .option("--max-tokens <n>", "Max tokens in response", parseInt)
@@ -49,20 +44,28 @@ export function chatCommand(): Command {
     .option("--server-cache", "Enable server-side caching")
     .option("--server-cache-ttl <seconds>", "Cache TTL (1-86400)", parseInt)
     .option("--heal", "Enable response healing")
-    .option("--json", "Output full response as JSON")
-    .option("--quiet", "Output only the response text")
     .option("--save <path>", "Save generated image to file")
-    .option("--stream", "Stream the response (default for TTY)")
+    .option("--stream", "Stream response (default for TTY)")
     .option("--no-stream", "Wait for full response")
     .option("--no-log", "Don't save to history")
-    .option("--conversation", "Start or continue a conversation")
-    .option("--continue", "Continue the most recent conversation")
-    .option("--resume <id>", "Resume a specific conversation by ID")
-    .action(async (messageParts: string[], opts: any) => {
+    .option("--json", "Output full response as JSON")
+    .option("--quiet", "Output only response text (for piping)")
+    .action(async (promptParts: string[], opts: any) => {
       const apiKey = requireOpenRouterKey();
       const format = getFormat(opts);
       const isTty = process.stdout.isTTY;
-      const message = messageParts.join(" ");
+
+      // ── Resolve prompt (args or stdin) ──────────────────────────────
+      let prompt = promptParts.join(" ");
+      if (!prompt || !prompt.trim()) {
+        if (!process.stdin.isTTY) {
+          prompt = await readStdin();
+        }
+        if (!prompt || !prompt.trim()) {
+          error("Error: No prompt provided. Pass as argument or pipe via stdin.");
+          process.exit(2);
+        }
+      }
 
       // ── Build content parts ─────────────────────────────────────────
       const images = opts.image
@@ -80,7 +83,7 @@ export function chatCommand(): Command {
 
       let contentParts: ChatContentPart[];
       try {
-        contentParts = buildContentParts(message, inputs);
+        contentParts = buildContentParts(prompt, inputs);
       } catch (err) {
         error(String(err));
         process.exit(2);
@@ -103,33 +106,8 @@ export function chatCommand(): Command {
         model = `${model}:exacto`;
       }
 
-      // ── Conversation context loading ────────────────────────────────
-      let conversationId: string | null = null;
-      const useConversation = opts.conversation || opts.continue || opts.resume;
-      let historyMsgs: import("../lib/types").ChatMessage[] | undefined;
-
-      if (opts.continue || opts.resume) {
-        const loadId = opts.resume || getLastConversationId();
-        if (!loadId) {
-          error("No conversation to continue. Use --conversation to start a new one.");
-          process.exit(2);
-        }
-        const entries = loadConversation(loadId);
-        if (entries.length === 0) {
-          error(`Conversation ${loadId} is empty or not found.`);
-          process.exit(2);
-        }
-        conversationId = loadId;
-        historyMsgs = toMessages(entries);
-
-        if (!opts.quiet) {
-          const msgCount = entries.filter((e) => e.role === "user").length;
-          console.log(chalk.dim(`  Continuing conversation ${loadId} (${msgCount} prior messages)`));
-        }
-      }
-
       // ── Build messages and request ──────────────────────────────────
-      const messages = buildMessages(contentParts, opts.system, historyMsgs);
+      const messages = buildMessages(contentParts, opts.system);
       const request = buildRequest(
         {
           model,
@@ -162,34 +140,16 @@ export function chatCommand(): Command {
       const useStream = opts.stream ?? (isTty && !opts.json && !opts.quiet);
       const startTime = Date.now();
 
-      // ── Image gen detection ─────────────────────────────────────────
-      let modelInfo: import("../lib/types").ORModel | undefined;
-      if (opts.save || opts.audio || opts.video || images.length > 0) {
-        try {
-          const { fetchModels } = await import("../lib/openrouter");
-          const allModels = await fetchModels(apiKey);
-          modelInfo = allModels.find((m) => m.id === model);
-        } catch {
-          // Continue without model info
-        }
-      }
-
-      if (opts.save && modelInfo) {
-        const outputModalities = modelInfo.architecture?.output_modalities ?? [];
-        if (outputModalities.includes("image")) {
-          request.modalities = outputModalities.includes("text")
-            ? ["image", "text"]
-            : ["image"];
-        }
-      }
+      // ── Model info for image gen detection ──────────────────────────
+      // We don't fetch models here to keep ask fast; image save handles it
 
       try {
         if (useStream) {
           // Streaming mode
           const spinnerText =
             attachments.length > 0
-              ? `Chatting with ${chalk.cyan(model)} (${attachments.join(", ")})...`
-              : `Chatting with ${chalk.cyan(model)}...`;
+              ? `Asking ${chalk.cyan(model)} with ${attachments.join(", ")}...`
+              : `Asking ${chalk.cyan(model)}...`;
           const spinner = ora({ text: spinnerText, spinner: "dots" }).start();
 
           const result = await handleStream(apiKey, request, extraHeaders, {
@@ -216,7 +176,6 @@ export function chatCommand(): Command {
               provider: result.provider,
               reasoning: result.reasoningText,
               attachments: attachments.length > 0 ? attachments : undefined,
-              conversationId: conversationId ?? undefined,
               quiet: opts.quiet,
             });
           }
@@ -228,7 +187,7 @@ export function chatCommand(): Command {
               model,
               provider: result.provider,
               systemPrompt: opts.system,
-              prompt: message + (attachments.length > 0 ? ` [${attachments.join(", ")}]` : ""),
+              prompt: prompt + (attachments.length > 0 ? ` [${attachments.join(", ")}]` : ""),
               response: result.fullText,
               usage: {
                 promptTokens: result.usage.prompt_tokens,
@@ -242,39 +201,12 @@ export function chatCommand(): Command {
               quiet: opts.quiet,
             });
           }
-
-          // Conversation
-          if (useConversation && result.fullText) {
-            const userContent = contentParts.length > 1 ? contentParts : message;
-            if (conversationId) {
-              appendConversation(conversationId, userContent, result.fullText, model, {
-                usage: {
-                  promptTokens: result.usage.prompt_tokens,
-                  completionTokens: result.usage.completion_tokens,
-                  totalTokens: result.usage.total_tokens,
-                },
-                latencyMs,
-              });
-            } else {
-              conversationId = createConversation(opts.system, userContent, model, result.fullText, {
-                usage: {
-                  promptTokens: result.usage.prompt_tokens,
-                  completionTokens: result.usage.completion_tokens,
-                  totalTokens: result.usage.total_tokens,
-                },
-                latencyMs,
-              });
-              if (!opts.quiet) {
-                console.log(chalk.dim(`  Conversation: ${conversationId}`));
-              }
-            }
-          }
         } else {
           // Non-streaming mode
           const spinnerText =
             attachments.length > 0
-              ? `Chatting with ${chalk.cyan(model)} (${attachments.join(", ")})...`
-              : `Chatting with ${chalk.cyan(model)}...`;
+              ? `Asking ${chalk.cyan(model)} with ${attachments.join(", ")}...`
+              : `Asking ${chalk.cyan(model)}...`;
           const spinner = ora({ text: spinnerText, spinner: "dots" }).start();
 
           const result = await handleNonStream(apiKey, request, extraHeaders);
@@ -282,10 +214,8 @@ export function chatCommand(): Command {
           spinner.stop();
 
           const respMessage = result.response.choices?.[0]?.message;
-          const content = respMessage?.content ?? "";
-          const reasoning = result.reasoning;
-          const cache = (result.response as any).cache;
           const annotations = respMessage?.annotations;
+          const cache = (result.response as any).cache;
           const tokenDetails = (result.response as any).usage?.completion_tokens_details;
           const promptDetails = (result.response as any).usage?.prompt_tokens_details;
           const cost = (result.response as any).usage?.cost;
@@ -307,14 +237,14 @@ export function chatCommand(): Command {
           }
 
           // History
-          if (opts.log !== false && content) {
+          if (opts.log !== false && result.content) {
             await logHistory({
               apiKey,
               model,
               provider: result.response.provider,
               systemPrompt: opts.system,
-              prompt: message + (attachments.length > 0 ? ` [${attachments.join(", ")}]` : ""),
-              response: content,
+              prompt: prompt + (attachments.length > 0 ? ` [${attachments.join(", ")}]` : ""),
+              response: result.content,
               usage: {
                 promptTokens: result.response.usage.prompt_tokens,
                 completionTokens: result.response.usage.completion_tokens,
@@ -328,47 +258,21 @@ export function chatCommand(): Command {
             });
           }
 
-          // Conversation
-          if (useConversation && content) {
-            const userContent = contentParts.length > 1 ? contentParts : message;
-            if (conversationId) {
-              appendConversation(conversationId, userContent, content, model, {
-                usage: {
-                  promptTokens: result.response.usage.prompt_tokens,
-                  completionTokens: result.response.usage.completion_tokens,
-                  totalTokens: result.response.usage.total_tokens,
-                },
-                latencyMs,
-              });
-            } else {
-              conversationId = createConversation(opts.system, userContent, model, content, {
-                usage: {
-                  promptTokens: result.response.usage.prompt_tokens,
-                  completionTokens: result.response.usage.completion_tokens,
-                  totalTokens: result.response.usage.total_tokens,
-                },
-                latencyMs,
-              });
-              if (!opts.quiet) {
-                console.log(chalk.dim(`  Conversation: ${conversationId}`));
-              }
-            }
-          }
-
           // Output
           if (format === "json") {
             console.log(JSON.stringify(result.response, null, 2));
           } else if (opts.quiet) {
-            process.stdout.write(content);
+            process.stdout.write(result.content);
             if (isTty) process.stdout.write("\n");
           } else {
-            if (reasoning && (opts.showReasoning || opts.reasoningEffort)) {
+            // Show reasoning
+            if (result.reasoning && (opts.showReasoning || opts.reasoningEffort)) {
               console.log(chalk.dim("── Reasoning ──"));
-              console.log(chalk.dim(reasoning));
+              console.log(chalk.dim(result.reasoning));
               console.log("");
               console.log(chalk.bold("── Response ──"));
             }
-            console.log(content);
+            console.log(result.content);
             console.log("");
 
             printStats({
@@ -376,7 +280,7 @@ export function chatCommand(): Command {
               latencyMs,
               model,
               provider: result.response.provider,
-              reasoning,
+              reasoning: result.reasoning,
               attachments: attachments.length > 0 ? attachments : undefined,
               cache,
               annotations,
@@ -384,7 +288,6 @@ export function chatCommand(): Command {
               imageTokens: tokenDetails?.image_tokens,
               reasoningTokens: tokenDetails?.reasoning_tokens,
               cachedTokens: promptDetails?.cached_tokens,
-              conversationId: conversationId ?? undefined,
               quiet: opts.quiet,
             });
           }

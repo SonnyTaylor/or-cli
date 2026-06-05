@@ -238,6 +238,64 @@ export interface RerankResponse {
   };
 }
 
+// ── Embeddings API Types ─────────────────────────────────────────────────────
+
+export interface EmbeddingsRequest {
+  input: string | string[] | number[][];
+  model: string;
+  dimensions?: number;
+  encoding_format?: "float" | "base64";
+  input_type?: string;
+  user?: string;
+}
+
+export interface EmbeddingsResponse {
+  id: string;
+  model: string;
+  object: "list";
+  data: {
+    embedding: number[] | string;
+    index: number;
+    object: "embedding";
+  }[];
+  usage: {
+    prompt_tokens: number;
+    total_tokens: number;
+    cost?: number;
+    prompt_tokens_details?: {
+      text_tokens?: number;
+      image_tokens?: number;
+      audio_tokens?: number;
+      video_tokens?: number;
+      file_tokens?: number;
+    };
+  };
+}
+
+// ── Transcription API Types ──────────────────────────────────────────────────
+
+export interface TranscriptionRequest {
+  input_audio: {
+    data: string;
+    format: string;
+  };
+  model: string;
+  language?: string;
+  temperature?: number;
+  provider?: Record<string, any>;
+}
+
+export interface TranscriptionResponse {
+  text: string;
+  usage?: {
+    cost?: number;
+    input_tokens?: number;
+    output_tokens?: number;
+    seconds?: number;
+    total_tokens?: number;
+  };
+}
+
 // ── CLI Types ────────────────────────────────────────────────────────────────
 
 export type OutputFormat = "table" | "json" | "md";
@@ -246,6 +304,7 @@ export interface GlobalOptions {
   json?: boolean;
   md?: boolean;
   noCache?: boolean;
+  quiet?: boolean;
 }
 
 export interface ModelInfo {

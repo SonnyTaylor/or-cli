@@ -153,4 +153,5 @@ The `rankings` command shows real usage data from OpenRouter — how many tokens
 - **Prices shown are "from" prices** — the cheapest provider. Use `or show` for price ranges.
 - **All model types are fetched** (text, image, video, speech, audio, transcription, embeddings). Use `-t` to filter specific modalities.
 - **`~` prefix models** (e.g. `~anthropic/claude-sonnet-latest`) are aliases that auto-resolve to the latest version.
-- **`--quiet` is only supported on `or chat`** — use `--json` on other commands for piping.
+- **`--json` for piping** — all commands support `--json` for machine-readable output.
+- **`--quiet` for minimal output** — suppresses non-essential output, returns only the core result.

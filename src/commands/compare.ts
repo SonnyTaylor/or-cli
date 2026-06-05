@@ -22,12 +22,13 @@ export function compareCommand(): Command {
     .option("--cost-estimate", "Show estimated cost per typical coding session (100K in / 50K out)")
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
+    .option("--quiet", "Suppress non-error output")
     .option("--no-cache", "Bypass cache")
     .action(async (modelIds: string[], opts: GlobalOptions & { benchmarks?: boolean; costEstimate?: boolean }) => {
       const apiKey = requireOpenRouterKey();
       const format = getFormat(opts);
 
-      const spinner = ora("Fetching models...").start();
+      const spinner = opts.quiet ? null : ora("Fetching models...").start();
 
       try {
         const allModels = await fetchModels(apiKey, opts.noCache);
@@ -42,11 +43,11 @@ export function compareCommand(): Command {
         }
 
         if (notFound.length > 0) {
-          spinner.warn(`Not found: ${notFound.join(", ")}`);
+          spinner?.warn(`Not found: ${notFound.join(", ")}`);
         }
 
         if (models.length < 2) {
-          spinner.fail("Need at least 2 valid models to compare.");
+          spinner?.fail("Need at least 2 valid models to compare.");
           process.exit(1);
         }
 
@@ -59,12 +60,12 @@ export function compareCommand(): Command {
               const aaModels = await fetchLLMBenchmarks(aaKey, opts.noCache);
               benchmarks = new Map(aaModels.map((m) => [m.slug, m]));
             } catch (err) {
-              spinner.warn(`Could not fetch benchmarks: ${err}`);
+              spinner?.warn(`Could not fetch benchmarks: ${err}`);
             }
           }
         }
 
-        spinner.stop();
+        spinner?.stop();
 
         if (format === "json") {
           const data = models.map((m) => ({
@@ -179,7 +180,7 @@ export function compareCommand(): Command {
 
         outputTable(headers, rows, format);
       } catch (err) {
-        spinner.fail("Failed to fetch models");
+        spinner?.fail("Failed to fetch models");
         console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }

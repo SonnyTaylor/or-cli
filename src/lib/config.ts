@@ -71,7 +71,7 @@ export function requireOpenRouterKey(): string {
     "Error: No OpenRouter API key found.\n" +
     "Run `or auth` to set your key, or set OPENROUTER_API_KEY env var."
   );
-  process.exit(1);
+  process.exit(3);
 }
 
 export function getAAKey(): string | undefined {

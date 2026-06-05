@@ -14,10 +14,11 @@ export function creditsCommand(): Command {
   const cmd = new Command("credits")
     .description("Show your OpenRouter account credits and usage")
     .option("--json", "Output as JSON")
+    .option("--quiet", "Suppress non-error output")
     .action(async (opts: GlobalOptions) => {
       const apiKey = requireOpenRouterKey();
 
-      const spinner = ora("Fetching credits...").start();
+      const spinner = opts.quiet ? null : ora("Fetching credits...").start();
 
       try {
         const res = await apiFetch("https://openrouter.ai/api/v1/credits", {
@@ -26,13 +27,13 @@ export function creditsCommand(): Command {
 
         if (!res.ok) {
           const body = await res.text().catch(() => "");
-          spinner.fail(`Failed: ${res.status}`);
+          spinner?.fail(`Failed: ${res.status}`);
           console.error(body);
           process.exit(1);
         }
 
         const data = (await res.json()) as { data: CreditsData };
-        spinner.stop();
+        spinner?.stop();
 
         const credits = data.data;
         const remaining = credits.total_credits - credits.total_usage;
@@ -65,7 +66,7 @@ export function creditsCommand(): Command {
         console.log(`  Remaining: $${remaining.toFixed(2)}`);
         console.log("");
       } catch (err) {
-        spinner.fail("Failed to fetch credits");
+        spinner?.fail("Failed to fetch credits");
         console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }

@@ -30,6 +30,7 @@ export function rankingsCommand(): Command {
     .option("--sort <field>", "Sort by: tokens, model, date", "tokens")
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
+    .option("--quiet", "Suppress non-error output")
     .option("--no-cache", "Bypass cache")
     .action(async (opts: GlobalOptions & {
       date?: string;
@@ -41,7 +42,7 @@ export function rankingsCommand(): Command {
       const format = getFormat(opts);
       const cacheTtl = getConfig().cacheTtlMs;
 
-      const spinner = ora("Fetching rankings...").start();
+      const spinner = opts.quiet ? null : ora("Fetching rankings...").start();
 
       try {
         let data: { data: RankingEntry[]; meta: RankingsMeta };
@@ -86,7 +87,7 @@ export function rankingsCommand(): Command {
         // Limit
         entries = entries.slice(0, opts.limit);
 
-        spinner.stop();
+        spinner?.stop();
 
         if (entries.length === 0) {
           console.log(chalk.dim("No ranking data matches your filters."));
@@ -152,7 +153,7 @@ export function rankingsCommand(): Command {
           }
         }
       } catch (err) {
-        spinner.fail("Failed to fetch rankings");
+        spinner?.fail("Failed to fetch rankings");
         console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }

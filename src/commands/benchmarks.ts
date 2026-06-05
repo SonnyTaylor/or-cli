@@ -17,6 +17,7 @@ export function benchmarksCommand(): Command {
     .option("--detailed", "Show all benchmark columns (LLM only)")
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
+    .option("--quiet", "Suppress non-error output")
     .option("--no-cache", "Bypass cache, fetch fresh data")
     .option("--list-types", "List available benchmark categories")
     .option("--or", "Show OpenRouter model IDs (cross-reference with available models)")
@@ -62,12 +63,12 @@ export function benchmarksCommand(): Command {
           );
           process.exit(1);
         }
-        const spinner2 = ora("Fetching OpenRouter models...").start();
+        const spinner2 = opts.quiet ? null : ora("Fetching OpenRouter models...").start();
         try {
           orModels = await fetchModels(orKey, opts.noCache);
-          spinner2.stop();
+          spinner2?.stop();
         } catch (err) {
-          spinner2.fail("Failed to fetch OpenRouter models");
+          spinner2?.fail("Failed to fetch OpenRouter models");
           console.error(chalk.red(formatNetworkError(err)));
           process.exit(1);
         }
@@ -75,7 +76,7 @@ export function benchmarksCommand(): Command {
 
       const format = getFormat(opts);
       const type = opts.type ?? "llm";
-      const spinner = ora(`Fetching ${type} benchmarks...`).start();
+      const spinner = opts.quiet ? null : ora(`Fetching ${type} benchmarks...`).start();
 
       try {
         if (type === "llm") {
@@ -84,7 +85,7 @@ export function benchmarksCommand(): Command {
           await showMediaBenchmarks(aaKey, type as AAMediaEndpoint, opts, format, spinner, orModels);
         }
       } catch (err) {
-        spinner.fail("Failed to fetch benchmarks");
+        spinner?.fail("Failed to fetch benchmarks");
         console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }
@@ -97,11 +98,11 @@ async function showLLMBenchmarks(
   aaKey: string,
   opts: { sort?: string; limit?: number; noCache?: boolean; detailed?: boolean },
   format: "table" | "json" | "md",
-  spinner: ReturnType<typeof ora>,
+  spinner: ReturnType<typeof ora> | null,
   orModels: ORModel[] | null
 ) {
   const models = await fetchLLMBenchmarks(aaKey, opts.noCache);
-  spinner.stop();
+  spinner?.stop();
 
   // Sort
   const sorted = [...models].sort((a, b) => {
@@ -199,11 +200,11 @@ async function showMediaBenchmarks(
   endpoint: AAMediaEndpoint,
   opts: { sort?: string; limit?: number; noCache?: boolean; or?: boolean },
   format: "table" | "json" | "md",
-  spinner: ReturnType<typeof ora>,
+  spinner: ReturnType<typeof ora> | null,
   orModels: ORModel[] | null
 ) {
   const models = await fetchMediaBenchmarks(aaKey, endpoint, opts.noCache);
-  spinner.stop();
+  spinner?.stop();
 
   // Sort
   const sorted = [...models].sort((a, b) => {
