@@ -11,9 +11,11 @@ import {
   combinedPrice,
   isVisionModel,
   isEmbeddingModel,
+  isPerImagePriced,
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks } from "../lib/artificial-analysis";
-import { getFormat, formatPriceStr, formatTps, modalityEmoji, formatCtxLong } from "../lib/format";
+import { getFormat, formatPriceStr, formatTps, modalityEmoji, formatCtxLong, formatAllPricing } from "../lib/format";
+import { PRICING_FALLBACKS } from "../lib/pricing-fallbacks";
 import type { GlobalOptions, ORModel } from "../lib/types";
 
 interface Endpoint {
@@ -21,12 +23,7 @@ interface Endpoint {
   quantization?: string;
   context_length: number;
   max_completion_tokens?: number;
-  pricing: {
-    prompt: string;
-    completion: string;
-    input_cache_read?: string;
-    image_output?: string;
-  };
+  pricing: Record<string, string>;
   uptime_last_1d?: number;
   uptime_last_30m?: number;
   latency_last_30m?: { p50: number };
@@ -147,113 +144,69 @@ export function showCommand(): Command {
         }
         console.log("");
 
-        // ── Pricing (with range from endpoints) ───────────────────────────
-        const headlineInput =
-          parseFloat(m.pricing.prompt ?? "0") * 1_000_000;
-        const headlineOutput =
-          parseFloat(m.pricing.completion ?? "0") * 1_000_000;
-
+        // ── Pricing ──────────────────────────────────────────────────────
         console.log(chalk.bold("  Pricing"));
 
-        // Check if any endpoint uses image-based pricing
-        const hasImagePricing = endpoints.some(
-          (e) => e.pricing.image_output && parseFloat(e.pricing.image_output) > 0
-        );
-
-        if (hasImagePricing) {
-          // Image-priced model — show per-image cost
-          const imagePrices = endpoints
-            .filter((e) => e.pricing.image_output)
-            .map((e) => parseFloat(e.pricing.image_output!) * 1_000_000);
-          if (imagePrices.length > 0) {
-            const minImg = Math.min(...imagePrices);
-            const maxImg = Math.max(...imagePrices);
-            console.log(
-              `    Per image: ${formatPriceStr(minImg)} / 1M image tokens`
-            );
-            if (minImg !== maxImg) {
-              console.log(
-                `    Range:     ${formatPriceStr(minImg)} – ${formatPriceStr(maxImg)}`
-              );
-            }
+        // Show model's headline pricing (all non-zero dimensions)
+        const pricingLines = formatAllPricing(m.pricing);
+        if (pricingLines.length > 0) {
+          for (const line of pricingLines) {
+            console.log(line);
           }
-          console.log(
-            chalk.dim(
-              `    (image-priced — token pricing not applicable)`
-            )
-          );
-        } else if (endpoints.length > 1) {
-          // Show price range across providers
-          const inputPrices = endpoints.map(
-            (e) => parseFloat(e.pricing.prompt) * 1_000_000
-          );
-          const outputPrices = endpoints.map(
-            (e) => parseFloat(e.pricing.completion) * 1_000_000
-          );
-
-          const minInput = Math.min(...inputPrices);
-          const maxInput = Math.max(...inputPrices);
-          const minOutput = Math.min(...outputPrices);
-          const maxOutput = Math.max(...outputPrices);
-          const avgInput =
-            inputPrices.reduce((a, b) => a + b, 0) / inputPrices.length;
-          const avgOutput =
-            outputPrices.reduce((a, b) => a + b, 0) / outputPrices.length;
-
-          if (minInput === maxInput) {
-            console.log(
-              `    Input:    ${formatPriceStr(minInput)} / 1M tokens`
-            );
-          } else {
-            console.log(
-              `    Input:    ${formatPriceStr(minInput)} – ${formatPriceStr(maxInput)} / 1M tokens  (avg ${formatPriceStr(avgInput)})`
-            );
-          }
-          if (minOutput === maxOutput) {
-            console.log(
-              `    Output:   ${formatPriceStr(minOutput)} / 1M tokens`
-            );
-          } else {
-            console.log(
-              `    Output:   ${formatPriceStr(minOutput)} – ${formatPriceStr(maxOutput)} / 1M tokens  (avg ${formatPriceStr(avgOutput)})`
-            );
-          }
-
-          // Cache read price range
-          const cachePrices = endpoints
-            .filter((e) => e.pricing.input_cache_read)
-            .map(
-              (e) => parseFloat(e.pricing.input_cache_read!) * 1_000_000
-            );
-          if (cachePrices.length > 0) {
-            const minCache = Math.min(...cachePrices);
-            const maxCache = Math.max(...cachePrices);
-            if (minCache === maxCache) {
-              console.log(
-                `    Cache:    ${formatPriceStr(minCache)} / 1M tokens`
-              );
-            } else {
-              console.log(
-                `    Cache:    ${formatPriceStr(minCache)} – ${formatPriceStr(maxCache)} / 1M tokens`
-              );
-            }
-          }
-
-          console.log(
-            chalk.dim(
-              `    (${endpoints.length} providers — run \`or endpoints ${modelId}\` for details)`
-            )
-          );
         } else {
-          console.log(
-            `    Input:    ${formatPriceStr(headlineInput)} / 1M tokens`
-          );
-          console.log(
-            `    Output:   ${formatPriceStr(headlineOutput)} / 1M tokens`
-          );
-          console.log(
-            `    Combined: ${formatPriceStr(combinedPrice(m))} / 1M tokens`
-          );
+          // Hardcoded fallback for models the API under-reports
+          const fallback = PRICING_FALLBACKS[m.id];
+          if (fallback) {
+            console.log(`    ${fallback.label.padEnd(14)} ${fallback.value}`);
+          } else {
+            console.log("    free");
+          }
+        }
+
+        // If multiple providers, show range for dimensions that vary
+        if (endpoints.length > 1) {
+          const headlineVals: Record<string, number> = {};
+          for (const key of Object.keys(m.pricing)) {
+            const v = parseFloat((m.pricing as any)[key] ?? "0");
+            if (v > 0) headlineVals[key] = v;
+          }
+
+          const dims = ["prompt", "completion", "image_output", "audio_output", "request"];
+          let showedRange = false;
+          for (const dim of dims) {
+            const vals = endpoints
+              .map((e) => parseFloat((e.pricing as any)[dim] ?? "0"))
+              .filter((n) => n > 0);
+            if (vals.length <= 1) continue;
+            const min = Math.min(...vals);
+            const max = Math.max(...vals);
+            // Skip if all providers match the headline price (no variation)
+            if (min === max && headlineVals[dim] === min) continue;
+            showedRange = true;
+            const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+            const label = dim.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).padEnd(14);
+            const unit = dim === "request" ? "" : "/ 1M tokens";
+            const fmt = (n: number) =>
+              dim === "request"
+                ? n < 0.0001
+                  ? "<$0.0001"
+                  : n < 0.01
+                    ? `$${n.toFixed(4)}`
+                    : `$${n.toFixed(2)}`
+                : formatPriceStr(n * 1_000_000);
+            if (min === max) {
+              console.log(`    ${label} ${fmt(min)}${unit ? " " + unit : ""}`);
+            } else {
+              console.log(`    ${label} ${fmt(min)} – ${fmt(max)}${unit ? " " + unit : ""}  (avg ${fmt(avg)})`);
+            }
+          }
+          if (showedRange) {
+            console.log(
+              chalk.dim(
+                `    (${endpoints.length} providers — run \`or endpoints ${modelId}\` for details)`
+              )
+            );
+          }
         }
         console.log("");
 

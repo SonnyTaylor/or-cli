@@ -9,7 +9,17 @@ export interface ORModel {
     prompt: string;
     completion: string;
     image?: string;
+    image_output?: string;
+    image_token?: string;
     request?: string;
+    audio?: string;
+    audio_output?: string;
+    web_search?: string;
+    internal_reasoning?: string;
+    input_cache_read?: string;
+    input_cache_write?: string;
+    input_audio_cache?: string;
+    discount?: number;
   };
   top_provider: {
     max_completion_tokens?: number;
@@ -45,6 +55,17 @@ export interface ORModelEndpoint {
   pricing: {
     prompt: string;
     completion: string;
+    image_output?: string;
+    image_token?: string;
+    request?: string;
+    audio?: string;
+    audio_output?: string;
+    web_search?: string;
+    internal_reasoning?: string;
+    input_cache_read?: string;
+    input_cache_write?: string;
+    input_audio_cache?: string;
+    discount?: number;
   };
   uptime_1d?: number;
   uptime_30m?: number;

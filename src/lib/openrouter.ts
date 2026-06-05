@@ -37,7 +37,7 @@ export async function fetchModels(apiKey: string, noCache = false, sort?: string
   // Fetch models in parallel: main list, embeddings, and specialized output modalities
   // The default /models only returns text-output models; we need to explicitly fetch others
   const mainPath = sort ? `/models?sort=${sort}` : '/models';
-  const [mainRes, embeddingsRes, imageRes, videoRes, speechRes, audioRes, transcriptionRes] = await Promise.all([
+  const [mainRes, embeddingsRes, imageRes, videoRes, speechRes, audioRes, transcriptionRes, rerankRes] = await Promise.all([
     orFetch<{ data: ORModel[] }>(mainPath, apiKey),
     orFetch<{ data: ORModel[] }>("/embeddings/models", apiKey).catch(() => ({ data: [] })),
     orFetch<{ data: ORModel[] }>("/models?output_modalities=image", apiKey).catch(() => ({ data: [] })),
@@ -45,6 +45,7 @@ export async function fetchModels(apiKey: string, noCache = false, sort?: string
     orFetch<{ data: ORModel[] }>("/models?output_modalities=speech", apiKey).catch(() => ({ data: [] })),
     orFetch<{ data: ORModel[] }>("/models?output_modalities=audio", apiKey).catch(() => ({ data: [] })),
     orFetch<{ data: ORModel[] }>("/models?output_modalities=transcription", apiKey).catch(() => ({ data: [] })),
+    orFetch<{ data: ORModel[] }>("/models?output_modalities=rerank", apiKey).catch(() => ({ data: [] })),
   ]);
 
   // Merge and deduplicate by id
@@ -59,6 +60,7 @@ export async function fetchModels(apiKey: string, noCache = false, sort?: string
     ...speechRes.data,
     ...audioRes.data,
     ...transcriptionRes.data,
+    ...rerankRes.data,
   ]) {
     if (!seen.has(m.id)) {
       seen.add(m.id);
@@ -97,14 +99,17 @@ export async function fetchModels(apiKey: string, noCache = false, sort?: string
         })
       );
 
-      // Update models with endpoint pricing
+      // Update models with endpoint pricing (merge all endpoint pricing fields)
       for (const result of results) {
         if (result?.pricing) {
           const model = models.find(m => m.id === result.id);
           if (model) {
             model.pricing = {
               ...model.pricing,
-              image: result.pricing.image_output || result.pricing.image,
+              ...result.pricing,
+              // Keep model-level prompt/completion if endpoint has zeros but model doesn't
+              prompt: model.pricing.prompt !== "0" ? model.pricing.prompt : (result.pricing.prompt ?? "0"),
+              completion: model.pricing.completion !== "0" ? model.pricing.completion : (result.pricing.completion ?? "0"),
             };
           }
         }
@@ -230,6 +235,16 @@ export function isRerankModel(model: ORModel): boolean {
   }
   const mod = getModelModality(model);
   return mod.includes("rerank") || model.id.includes("rerank");
+}
+
+export function isImageEditModel(model: ORModel): boolean {
+  const input = model.architecture?.input_modalities ?? [];
+  const output = model.architecture?.output_modalities ?? [];
+  if (input.length || output.length) {
+    return input.includes("image") && output.includes("image");
+  }
+  const mod = getModelModality(model);
+  return mod.includes("image->image") || mod.includes("image+image->image");
 }
 
 export function isTranscriptionModel(model: ORModel): boolean {
@@ -411,4 +426,119 @@ export function getPerImagePrice(model: ORModel): number | null {
     return imagePrice; // Price per image token
   }
   return null;
+}
+
+/**
+ * Determine the primary price to display for a model in table listings.
+ * Picks the most relevant pricing dimension based on model modality.
+ * Returns { display: human-readable string, sortValue: number for sorting }.
+ */
+function fmtTokenPrice(n: number, suffix: string): { display: string; sortValue: number } {
+  const perM = n * 1_000_000;
+  if (perM === 0) return { display: "free", sortValue: 0 };
+  const disp = perM < 0.01 ? `<$0.01/M ${suffix}` : `$${perM.toFixed(2)}/M ${suffix}`;
+  return { display: disp, sortValue: perM };
+}
+
+function fmtReqPrice(n: number): { display: string; sortValue: number } {
+  if (n === 0) return { display: "free", sortValue: 0 };
+  const disp = n < 0.0001 ? "<$0.0001/req" : n < 0.01 ? `$${n.toFixed(4)}/req` : `$${n.toFixed(2)}/req`;
+  return { display: disp, sortValue: n };
+}
+
+function fmtImgPrice(n: number): { display: string; sortValue: number } {
+  if (n === 0) return { display: "free", sortValue: 0 };
+  const perImage = n * 1000;
+  const perM = n * 1_000_000;
+  // For image token pricing, per-image is almost always the more intuitive unit.
+  // Only show per-M if per-image would be > $10 (i.e. extremely expensive).
+  if (perImage < 10.0) {
+    const disp = perImage < 0.01 ? "<$0.01/img" : `$${perImage.toFixed(2)}/img`;
+    return { display: disp, sortValue: perImage };
+  }
+  const disp = perM < 0.01 ? "<$0.01/M img" : `$${perM.toFixed(2)}/M img`;
+  return { display: disp, sortValue: perM };
+}
+
+import { PRICING_FALLBACKS } from "./pricing-fallbacks";
+
+export function getPrimaryPrice(model: ORModel): { display: string; sortValue: number } {
+  const p = model.pricing;
+  const prompt = parseFloat(p.prompt ?? "0");
+  const completion = parseFloat(p.completion ?? "0");
+
+  // ── 1. Live API pricing (always preferred) ──────────────────────────
+
+  // Rerankers: per-request pricing
+  if (isRerankModel(model)) {
+    const req = parseFloat(p.request ?? "0");
+    if (req > 0) return fmtReqPrice(req);
+  }
+
+  // Image generation
+  if (isImageGenModel(model)) {
+    if (p.image_output && parseFloat(p.image_output) > 0) return fmtImgPrice(parseFloat(p.image_output));
+    if (p.image_token && parseFloat(p.image_token) > 0) return fmtImgPrice(parseFloat(p.image_token));
+    const img = parseFloat(p.image ?? "0");
+    if (img > 0 && prompt === 0 && completion === 0) return fmtImgPrice(img);
+    if (completion > 0) return fmtTokenPrice(completion, "out");
+    if (prompt > 0) return fmtTokenPrice(prompt, "in");
+  }
+
+  // Speech / TTS / Music
+  if (isSpeechModel(model) || isAudioGenModel(model)) {
+    if (prompt > 0) return fmtTokenPrice(prompt, "in");
+    if (p.audio_output && parseFloat(p.audio_output) > 0) return fmtTokenPrice(parseFloat(p.audio_output), "audio");
+    if (p.audio && parseFloat(p.audio) > 0) return fmtTokenPrice(parseFloat(p.audio), "audio");
+    const req = parseFloat(p.request ?? "0");
+    if (req > 0) return fmtReqPrice(req);
+  }
+
+  // Transcription
+  if (isTranscriptionModel(model)) {
+    if (p.audio && parseFloat(p.audio) > 0) return fmtTokenPrice(parseFloat(p.audio), "audio");
+    if (prompt > 0) {
+      if (prompt < 0.0001) return fmtTokenPrice(prompt, "audio"); // OpenAI per-token
+      const disp = prompt < 0.01 ? `<$0.01/min` : `$${prompt.toFixed(3)}/min`; // per-minute
+      return { display: disp, sortValue: prompt };
+    }
+    const req = parseFloat(p.request ?? "0");
+    if (req > 0) return fmtReqPrice(req);
+  }
+
+  // Video models
+  if (isVideoModel(model)) {
+    if (completion > 0) return fmtTokenPrice(completion, "out");
+    if (prompt > 0) return fmtTokenPrice(prompt, "in");
+    const req = parseFloat(p.request ?? "0");
+    if (req > 0) return fmtReqPrice(req);
+  }
+
+  // Embedding models
+  if (isEmbeddingModel(model)) {
+    if (prompt > 0) return fmtTokenPrice(prompt, "in");
+    if (p.audio && parseFloat(p.audio) > 0) return fmtTokenPrice(parseFloat(p.audio), "audio");
+  }
+
+  // Default: text/vision/chat models
+  if (prompt > 0 || completion > 0) {
+    if (prompt > 0 && completion === 0) return fmtTokenPrice(prompt, "in");
+    if (completion > 0 && prompt === 0) return fmtTokenPrice(completion, "out");
+    const cp = (prompt * 3 + completion) / 4 * 1_000_000;
+    if (cp > 0) return { display: `$${cp.toFixed(2)}/M`, sortValue: cp };
+  }
+
+  if (p.audio && parseFloat(p.audio) > 0) return fmtTokenPrice(parseFloat(p.audio), "audio");
+  const req = parseFloat(p.request ?? "0");
+  if (req > 0) return fmtReqPrice(req);
+
+  // ── 2. Hardcoded fallback (API returns zeros / omits pricing) ───────
+  const fallback = PRICING_FALLBACKS[model.id];
+  if (fallback) return { display: fallback.value, sortValue: fallback.sortValue };
+
+  // ── 3. Generic placeholders (don't falsely claim "free") ────────────
+  if (isRerankModel(model))    return { display: "per-request", sortValue: Infinity };
+  if (isVideoModel(model))     return { display: "per-second",  sortValue: Infinity };
+
+  return { display: "free", sortValue: 0 };
 }

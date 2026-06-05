@@ -70,6 +70,110 @@ export function formatPerImagePrice(pricePerImageToken: number | null | undefine
   return `$${pricePerImage.toFixed(2)}/img`;
 }
 
+export function formatRequestPrice(pricePerRequest: number): string {
+  if (pricePerRequest === 0) return "free";
+  if (pricePerRequest < 0.0001) return "<$0.0001/req";
+  if (pricePerRequest < 0.01) return `$${pricePerRequest.toFixed(4)}/req`;
+  return `$${pricePerRequest.toFixed(2)}/req`;
+}
+
+export function formatAudioPrice(pricePerAudioToken: number): string {
+  if (pricePerAudioToken === 0) return "free";
+  const perM = pricePerAudioToken * 1_000_000;
+  if (perM < 0.01) return "<$0.01/M audio";
+  return `$${perM.toFixed(2)}/M audio`;
+}
+
+const PRICING_LABELS: Record<string, string> = {
+  prompt: "Prompt",
+  completion: "Completion",
+  request: "Request",
+  image: "Image",
+  image_output: "Image output",
+  image_token: "Image token",
+  audio: "Audio",
+  audio_output: "Audio output",
+  web_search: "Web search",
+  internal_reasoning: "Reasoning",
+  input_cache_read: "Cache read",
+  input_cache_write: "Cache write",
+  input_audio_cache: "Audio cache",
+};
+
+const PRICING_UNITS: Record<string, string> = {
+  prompt: "/ 1M tokens",
+  completion: "/ 1M tokens",
+  request: "",
+  image: "/ image",
+  image_output: "/ image",
+  image_token: "/ 1M image tokens",
+  audio: "/ 1M audio tokens",
+  audio_output: "/ 1M audio tokens",
+  web_search: "/ search",
+  internal_reasoning: "/ 1M tokens",
+  input_cache_read: "/ 1M tokens",
+  input_cache_write: "/ 1M tokens",
+  input_audio_cache: "/ 1M tokens",
+};
+
+/**
+ * Format a single pricing dimension for display in `or show`.
+ * Returns null if the price is zero/undefined.
+ */
+export function formatPricingDimension(
+  key: string,
+  value: string | number | undefined
+): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  const n = typeof value === "string" ? parseFloat(value) : value;
+  if (isNaN(n) || n === 0) return null;
+
+  const label = PRICING_LABELS[key] ?? key;
+  const unit = PRICING_UNITS[key] ?? "";
+
+  // Per-request prices show raw value; token/unit prices show per-1M
+  const isPerRequest = key === "request" || key === "web_search";
+  const displayValue = isPerRequest
+    ? n < 0.0001
+      ? "<$0.0001"
+      : n < 0.01
+        ? `$${n.toFixed(4)}`
+        : `$${n.toFixed(2)}`
+    : formatPriceStr(n * 1_000_000);
+
+  return `    ${label.padEnd(14)} ${displayValue}${unit ? " " + unit : ""}`;
+}
+
+/**
+ * Get all non-zero pricing dimensions as formatted strings.
+ * Ordered by relevance for display.
+ */
+export function formatAllPricing(
+  pricing: Record<string, string | undefined>
+): string[] {
+  const order = [
+    "prompt",
+    "completion",
+    "image_output",
+    "image",
+    "image_token",
+    "audio_output",
+    "audio",
+    "request",
+    "web_search",
+    "internal_reasoning",
+    "input_cache_read",
+    "input_cache_write",
+    "input_audio_cache",
+  ];
+  const lines: string[] = [];
+  for (const key of order) {
+    const line = formatPricingDimension(key, pricing[key]);
+    if (line) lines.push(line);
+  }
+  return lines;
+}
+
 export function formatTps(tps: number | undefined): string {
   if (tps === undefined) return "—";
   if (tps < 1) return `${(tps * 1000).toFixed(0)}ms`;

@@ -18,12 +18,10 @@ import {
   isRerankModel,
   isTranscriptionModel,
   isSpeechModel,
-  combinedPrice,
-  isPerImagePriced,
-  getPerImagePrice,
+  getPrimaryPrice,
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks, fetchMediaBenchmarks } from "../lib/artificial-analysis";
-import { getFormat, outputTable, formatPriceStr, formatPerImagePrice, modalityEmoji, formatCtx, error } from "../lib/format";
+import { getFormat, outputTable, modalityEmoji, formatCtx, error } from "../lib/format";
 import { formatNetworkError } from "../lib/fetch";
 import type { ORModel, AAModel, GlobalOptions } from "../lib/types";
 
@@ -92,8 +90,8 @@ export function modelsCommand(): Command {
         if (opts.tools) models = models.filter(hasTools);
         if (opts.reasoning) models = models.filter(hasReasoning);
         if (opts.vision) models = models.filter(isVisionModel);
-        if (opts.free) models = models.filter((m) => combinedPrice(m) === 0);
-        if (opts.maxCost !== undefined) models = models.filter((m) => combinedPrice(m) <= opts.maxCost!);
+        if (opts.free) models = models.filter((m) => getPrimaryPrice(m).sortValue === 0);
+        if (opts.maxCost !== undefined) models = models.filter((m) => getPrimaryPrice(m).sortValue <= opts.maxCost!);
         if (opts.minContext) models = models.filter((m) => m.context_length >= opts.minContext!);
         if (opts.provider) {
           const prov = opts.provider.toLowerCase();
@@ -162,14 +160,11 @@ export function modelsCommand(): Command {
 
         // Build output
         const headers = benchmarks
-          ? ["Model", "Modality", "Price/M", "Context", "🔧", "Coding", "Intel", "Speed"]
-          : ["Model", "Modality", "Price from/M", "Context", "🔧", "🧠"];
+          ? ["Model", "Modality", "Price", "Context", "🔧", "Coding", "Intel", "Speed"]
+          : ["Model", "Modality", "Price", "Context", "🔧", "🧠"];
 
         const rows = models.map((m) => {
-          const perImage = isPerImagePriced(m);
-          const priceDisplay = perImage
-            ? formatPerImagePrice(getPerImagePrice(m))
-            : formatPriceStr(combinedPrice(m));
+          const priceDisplay = getPrimaryPrice(m).display;
           const base = [
             m.id,
             modalityEmoji(getModelModality(m)) + " " + getModelModality(m),
@@ -235,25 +230,7 @@ function sortModels(models: ORModel[], sort: string): ORModel[] {
   switch (sort) {
     case "price":
       return [...models].sort((a, b) => {
-        // For per-image models, compare by per-image price
-        const aPerImage = isPerImagePriced(a);
-        const bPerImage = isPerImagePriced(b);
-        
-        if (aPerImage && bPerImage) {
-          // Both per-image: compare by image price
-          const aPrice = getPerImagePrice(a) ?? 0;
-          const bPrice = getPerImagePrice(b) ?? 0;
-          return aPrice - bPrice;
-        } else if (aPerImage) {
-          // a is per-image, b is token-based: a comes after b (per-image is usually more expensive per request)
-          return 1;
-        } else if (bPerImage) {
-          // b is per-image, a is token-based: a comes before b
-          return -1;
-        }
-        
-        // Both token-based: compare by combined price
-        return combinedPrice(a) - combinedPrice(b);
+        return getPrimaryPrice(a).sortValue - getPrimaryPrice(b).sortValue;
       });
     case "context":
       return [...models].sort((a, b) => b.context_length - a.context_length);
