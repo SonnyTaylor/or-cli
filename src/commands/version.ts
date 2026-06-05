@@ -16,7 +16,7 @@ function getPackageVersion(): string {
 
 function getGitCommit(): string | null {
   try {
-    return execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
+    return execSync("git rev-parse --short HEAD", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
   } catch {
     return null;
   }
