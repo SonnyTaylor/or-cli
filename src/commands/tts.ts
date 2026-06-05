@@ -5,7 +5,7 @@ import { requireOpenRouterKey } from "../lib/config";
 import { apiFetch, formatNetworkError } from "../lib/fetch";
 import type { GlobalOptions } from "../lib/types";
 import { writeFileSync } from "fs";
-import { basename, resolve } from "path";
+import { resolve } from "path";
 
 interface TTSModel {
   id: string;
@@ -15,8 +15,42 @@ interface TTSModel {
     prompt?: string;
     completion?: string;
     image?: string;
+    request?: string;
   };
   supported_voices?: string[];
+}
+
+const TTS_MODELS_URL = "https://openrouter.ai/api/v1/models?output_modalities=speech";
+const TTS_API_URL = "https://openrouter.ai/api/v1/audio/speech";
+
+async function fetchTTSModels(apiKey: string): Promise<TTSModel[]> {
+  const res = await apiFetch(TTS_MODELS_URL, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Failed to fetch TTS models: ${res.status} ${body}`);
+  }
+  const data = (await res.json()) as { data: TTSModel[] };
+  return data.data;
+}
+
+function formatTTSPrice(model: TTSModel): string {
+  const prompt = parseFloat(model.pricing?.prompt ?? "0");
+  const request = parseFloat(model.pricing?.request ?? "0");
+  if (prompt > 0) {
+    return `$${(prompt * 1_000_000).toFixed(2)}/1M chars`;
+  }
+  if (request > 0) {
+    return `$${request.toFixed(4)}/request`;
+  }
+  return "free";
+}
+
+function estimateTTSCost(model: TTSModel, text: string): number {
+  const prompt = parseFloat(model.pricing?.prompt ?? "0");
+  const request = parseFloat(model.pricing?.request ?? "0");
+  return text.length * prompt + request;
 }
 
 export function ttsCommand(): Command {
@@ -31,6 +65,7 @@ export function ttsCommand(): Command {
     .option("--input <text>", "Text to synthesize (alternative to positional arg)")
     .option("--list-models", "List available TTS models")
     .option("--list-voices", "List supported voices for the selected model")
+    .option("--dry-run", "Show cost estimate without generating audio")
     .option("--json", "Output metadata as JSON (audio still saved to file)")
     .option("--quiet", "Suppress non-error output")
     .action(async (inputParts: string[], opts: GlobalOptions & {
@@ -42,30 +77,23 @@ export function ttsCommand(): Command {
       input?: string;
       listModels?: boolean;
       listVoices?: boolean;
+      dryRun?: boolean;
       json?: boolean;
       quiet?: boolean;
     }) => {
       const apiKey = requireOpenRouterKey();
 
-      // List models mode
-      // List voices mode
+      // ── List voices mode ──────────────────────────────────────────────
       if (opts.listVoices) {
         const spinner = ora(`Fetching voices for ${opts.model}...`).start();
         try {
-          const res = await apiFetch("https://openrouter.ai/api/v1/models?output_modalities=speech", {
-            headers: { Authorization: `Bearer ${apiKey}` },
-          });
-          if (!res.ok) {
-            spinner.fail(`Failed: ${res.status}`);
-            const body = await res.text().catch(() => "");
-            console.error(body);
-            process.exit(1);
-          }
-          const data = (await res.json()) as { data: TTSModel[] };
-          const model = data.data.find((m) => m.id === opts.model);
+          const models = await fetchTTSModels(apiKey);
+          const model = models.find((m) => m.id === opts.model);
           if (!model) {
             spinner.fail(`Model not found: ${opts.model}`);
-            console.log(chalk.dim("Use `or tts --list-models` to see available TTS models."));
+            if (!opts.quiet) {
+              console.log(chalk.dim("Use `or tts --list-models` to see available TTS models."));
+            }
             process.exit(1);
           }
           spinner.stop();
@@ -76,6 +104,8 @@ export function ttsCommand(): Command {
             console.log(JSON.stringify({ model: model.id, voices }, null, 2));
             return;
           }
+
+          if (opts.quiet) return;
 
           console.log(chalk.bold(`\n  ${model.id}`));
           if (model.name) console.log(`  ${model.name}`);
@@ -91,63 +121,88 @@ export function ttsCommand(): Command {
           return;
         } catch (err) {
           spinner.fail("Failed to fetch voices");
-          console.error(chalk.red(formatNetworkError(err)));
+          if (!opts.quiet) console.error(chalk.red(formatNetworkError(err)));
           process.exit(1);
         }
       }
 
-      // List models mode
+      // ── List models mode ──────────────────────────────────────────────
       if (opts.listModels) {
         const spinner = ora("Fetching TTS models...").start();
         try {
-          const res = await apiFetch("https://openrouter.ai/api/v1/models?output_modalities=speech", {
-            headers: { Authorization: `Bearer ${apiKey}` },
-          });
-          if (!res.ok) {
-            spinner.fail(`Failed: ${res.status}`);
-            const body = await res.text().catch(() => "");
-            console.error(body);
-            process.exit(1);
-          }
-          const data = (await res.json()) as { data: TTSModel[] };
+          const models = await fetchTTSModels(apiKey);
           spinner.stop();
 
           if (opts.json) {
-            console.log(JSON.stringify(data.data, null, 2));
+            console.log(JSON.stringify(models, null, 2));
             return;
           }
 
+          if (opts.quiet) return;
+
           console.log(chalk.bold("\n  Available TTS Models\n"));
-          for (const m of data.data) {
-            console.log(`  ${chalk.cyan(m.id)}`);
+          for (const m of models) {
+            console.log(`  ${chalk.cyan(m.id)}  ${chalk.dim(formatTTSPrice(m))}`);
             if (m.name) console.log(`    ${m.name}`);
             if (m.description) console.log(`    ${chalk.dim(m.description.slice(0, 120))}${m.description.length > 120 ? "..." : ""}`);
             console.log("");
           }
-          console.log(chalk.dim(`  ${data.data.length} model(s)`));
+          console.log(chalk.dim(`  ${models.length} model(s)`));
           console.log("");
           return;
         } catch (err) {
           spinner.fail("Failed to fetch TTS models");
-          console.error(chalk.red(formatNetworkError(err)));
+          if (!opts.quiet) console.error(chalk.red(formatNetworkError(err)));
           process.exit(1);
         }
       }
 
-      // Determine text input
+      // ── Synthesis mode ────────────────────────────────────────────────
       const text = opts.input ?? inputParts.join(" ");
       if (!text || !text.trim()) {
         console.error(chalk.red("Error: No text provided. Pass text as argument or use --input <text>"));
         process.exit(1);
       }
 
-      const model = opts.model!;
+      const modelId = opts.model!;
       const voice = opts.voice!;
       const format = opts.format ?? "mp3";
       const outputPath = resolve(opts.output ?? "output.mp3");
 
+      // Fetch model info for validation + pricing
+      let ttsModel: TTSModel | undefined;
+      try {
+        const models = await fetchTTSModels(apiKey);
+        ttsModel = models.find((m) => m.id === modelId);
+      } catch {
+        // Continue without model info; API will validate
+      }
+
+      // Validate voice
+      if (ttsModel?.supported_voices && ttsModel.supported_voices.length > 0) {
+        if (!ttsModel.supported_voices.includes(voice)) {
+          console.error(chalk.red(`Error: Invalid voice "${voice}" for model ${modelId}`));
+          console.error(chalk.dim(`  Valid voices: ${ttsModel.supported_voices.join(", ")}`));
+          console.error(chalk.dim(`  Run \`or tts --list-voices -m ${modelId}\` to see all voices.`));
+          process.exit(1);
+        }
+      }
+
+      // Show cost estimate
+      const cost = ttsModel ? estimateTTSCost(ttsModel, text) : null;
+      if (cost !== null && cost > 0 && !opts.quiet) {
+        console.log(chalk.dim(`  Estimated cost: $${cost.toFixed(4)} (${text.length} chars)`));
+      }
+
+      if (opts.dryRun) {
+        if (!opts.quiet) {
+          console.log(chalk.blue("ℹ Dry run — no audio generated."));
+        }
+        return;
+      }
+
       const body: Record<string, any> = {
-        model,
+        model: modelId,
         input: text,
         voice,
         response_format: format,
@@ -156,11 +211,11 @@ export function ttsCommand(): Command {
         body.speed = opts.speed;
       }
 
-      const spinnerText = `Synthesizing speech with ${model}...`;
+      const spinnerText = `Synthesizing speech with ${modelId}...`;
       const spinner = opts.quiet ? null : ora(spinnerText).start();
 
       try {
-        const res = await apiFetch("https://openrouter.ai/api/v1/audio/speech", {
+        const res = await apiFetch(TTS_API_URL, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -174,11 +229,18 @@ export function ttsCommand(): Command {
         if (!res.ok) {
           const errBody = await res.text().catch(() => "");
           spinner?.fail(`Failed: ${res.status}`);
-          try {
-            const parsed = JSON.parse(errBody);
-            console.error(chalk.red(JSON.stringify(parsed, null, 2)));
-          } catch {
-            console.error(chalk.red(errBody));
+
+          // Helpful guidance on voice errors
+          if (res.status === 400 && errBody.toLowerCase().includes("voice")) {
+            console.error(chalk.red("Error: Invalid voice parameter."));
+            console.error(chalk.dim(`  Run \`or tts --list-voices -m ${modelId}\` to see valid voices.`));
+          } else {
+            try {
+              const parsed = JSON.parse(errBody);
+              console.error(chalk.red(JSON.stringify(parsed, null, 2)));
+            } catch {
+              console.error(chalk.red(errBody));
+            }
           }
           process.exit(1);
         }
@@ -193,7 +255,7 @@ export function ttsCommand(): Command {
 
         if (opts.json) {
           console.log(JSON.stringify({
-            model,
+            model: modelId,
             voice,
             input: text,
             format,
@@ -201,6 +263,7 @@ export function ttsCommand(): Command {
             size_bytes: audioBuffer.byteLength,
             size_kb: Math.round(sizeKb * 10) / 10,
             generation_id: generationId,
+            estimated_cost: cost,
           }, null, 2));
           return;
         }
@@ -212,7 +275,10 @@ export function ttsCommand(): Command {
         if (generationId) {
           console.log(chalk.dim(`  Generation ID: ${generationId}`));
         }
-        console.log(chalk.dim(`  Model: ${model} • Voice: ${voice} • Format: ${format}`));
+        console.log(chalk.dim(`  Model: ${modelId} • Voice: ${voice} • Format: ${format}`));
+        if (cost !== null && cost > 0) {
+          console.log(chalk.dim(`  Cost: $${cost.toFixed(4)}`));
+        }
         console.log("");
       } catch (err) {
         spinner?.fail("Failed to synthesize speech");

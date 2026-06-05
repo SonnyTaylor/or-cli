@@ -194,7 +194,13 @@ export function isRerankModel(model: ORModel): boolean {
 
 export function isTranscriptionModel(model: ORModel): boolean {
   const mod = getModelModality(model);
-  return mod.includes("transcription") || model.id.includes("whisper") || model.id.includes("transcri");
+  const [input, output] = mod.split("->");
+  return (
+    mod.includes("transcription") ||
+    model.id.includes("whisper") ||
+    model.id.includes("transcri") ||
+    ((input?.includes("audio") ?? false) && (output?.includes("text") ?? false))
+  );
 }
 
 export function isAudioModel(model: ORModel): boolean {

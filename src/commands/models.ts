@@ -22,7 +22,7 @@ import {
   getPerImagePrice,
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks, fetchMediaBenchmarks } from "../lib/artificial-analysis";
-import { getFormat, outputTable, formatPriceStr, formatPerImagePrice, truncate, modalityEmoji, formatCtx, error } from "../lib/format";
+import { getFormat, outputTable, formatPriceStr, formatPerImagePrice, modalityEmoji, formatCtx, error } from "../lib/format";
 import { formatNetworkError } from "../lib/fetch";
 import type { ORModel, AAModel, GlobalOptions } from "../lib/types";
 
@@ -48,7 +48,7 @@ export function modelsCommand(): Command {
   const cmd = new Command("models")
     .description("List, search, and filter available models")
     .argument("[query]", "Search query (matches model id, name, description)")
-    .option("-t, --type <type>", "Filter by modality: text, image, vision, embedding, audio, audio-gen, video, rerank, transcription")
+    .option("-t, --type <type>", "Filter by modality: text, image, vision, embedding, audio, audio-in, audio-out, audio-gen, video, rerank, transcription")
     .option("--tools", "Only models with tool/function calling support")
     .option("--reasoning", "Only reasoning models (o1, o3, r1, qwq, etc)")
     .option("--vision", "Only vision/multimodal models")
@@ -153,6 +153,12 @@ export function modelsCommand(): Command {
           return;
         }
 
+        // JSON output: return raw API data for programmatic use
+        if (format === "json") {
+          console.log(JSON.stringify(models, null, 2));
+          return;
+        }
+
         // Build output
         const headers = benchmarks
           ? ["Model", "Modality", "Price/M", "Context", "🔧", "Coding", "Intel", "Speed"]
@@ -164,7 +170,7 @@ export function modelsCommand(): Command {
             ? formatPerImagePrice(getPerImagePrice(m))
             : formatPriceStr(combinedPrice(m));
           const base = [
-            truncate(m.id, 45),
+            m.id,
             modalityEmoji(getModelModality(m)) + " " + getModelModality(m),
             priceDisplay,
             formatCtx(m.context_length),
@@ -207,12 +213,18 @@ function filterByType(models: ORModel[], type: string): ORModel[] {
     case "vision": return models.filter(isVisionModel);
     case "embedding": case "embed": return models.filter(isEmbeddingModel);
     case "audio": return models.filter(isAudioModel);
+    case "audio-in": return models.filter((m) => {
+      const mod = getModelModality(m);
+      const [input, output] = mod.split("->");
+      return (input?.includes("audio") ?? false) && (output?.includes("text") ?? false);
+    });
+    case "audio-out": return models.filter(isAudioGenModel);
     case "audio-gen": return models.filter(isAudioGenModel);
     case "video": return models.filter(isVideoModel);
     case "rerank": return models.filter(isRerankModel);
     case "transcription": case "stt": return models.filter(isTranscriptionModel);
     default:
-      console.log(chalk.yellow(`Unknown type "${type}". Valid: text, image, vision, embedding, audio, audio-gen, video, rerank, transcription`));
+      console.log(chalk.yellow(`Unknown type "${type}". Valid: text, image, vision, embedding, audio, audio-in, audio-out, audio-gen, video, rerank, transcription`));
       return models;
   }
 }
