@@ -4,6 +4,7 @@ import ora from "ora";
 import { requireOpenRouterKey } from "../lib/config";
 import { getCached, setCache } from "../lib/cache";
 import { getConfig } from "../lib/config";
+import { apiFetch, formatNetworkError } from "../lib/fetch";
 import { getFormat, outputTable, truncate } from "../lib/format";
 import type { GlobalOptions } from "../lib/types";
 
@@ -107,7 +108,7 @@ export function providersCommand(): Command {
         }
       } catch (err) {
         spinner.fail("Failed to fetch providers");
-        console.error(chalk.red(String(err)));
+        console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }
     });
@@ -116,7 +117,7 @@ export function providersCommand(): Command {
 }
 
 async function fetchProviders(apiKey: string): Promise<Provider[]> {
-  const res = await fetch("https://openrouter.ai/api/v1/providers", {
+  const res = await apiFetch("https://openrouter.ai/api/v1/providers", {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
   if (!res.ok) {

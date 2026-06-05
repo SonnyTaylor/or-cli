@@ -27,6 +27,11 @@ function printConfig(config: Config): void {
   console.log(chalk.bold("  Cache"));
   console.log(`    TTL:         ${config.cacheTtlMs ? (config.cacheTtlMs / 3600000).toFixed(1) + "h" : "6h"}`);
   console.log("");
+
+  // Network
+  console.log(chalk.bold("  Network"));
+  console.log(`    Insecure:    ${config.insecure ? chalk.yellow("enabled (SSL verification disabled)") : chalk.dim("disabled")}`);
+  console.log("");
 }
 
 export function configCommand(): Command {
@@ -40,6 +45,8 @@ export function configCommand(): Command {
     .option("--set-audio <model>", "Set default model when --audio is used")
     .option("--set-video <model>", "Set default model when --video is used")
     .option("--clear <modality>", "Clear default for a modality (text/image/vision/audio/video/global)")
+    .option("--insecure", "Disable SSL certificate verification (for corporate networks with DPI)")
+    .option("--no-insecure", "Re-enable SSL certificate verification")
     .action((opts) => {
       const config = getConfig();
       let updated = false;
@@ -74,6 +81,18 @@ export function configCommand(): Command {
       if (updated) {
         changes.defaultModels = modelDefaults;
         setConfig(changes);
+      }
+
+      // Insecure mode
+      if (opts.insecure === true) {
+        setConfig({ insecure: true });
+        console.log(chalk.green("✓ insecure mode enabled (SSL verification disabled)"));
+        updated = true;
+      }
+      if (opts.insecure === false) {
+        setConfig({ insecure: false });
+        console.log(chalk.green("✓ insecure mode disabled (SSL verification enabled)"));
+        updated = true;
       }
 
       // Clear defaults

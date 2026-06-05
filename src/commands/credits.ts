@@ -2,6 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import { requireOpenRouterKey } from "../lib/config";
+import { apiFetch, formatNetworkError } from "../lib/fetch";
 import type { GlobalOptions } from "../lib/types";
 
 interface CreditsData {
@@ -19,7 +20,7 @@ export function creditsCommand(): Command {
       const spinner = ora("Fetching credits...").start();
 
       try {
-        const res = await fetch("https://openrouter.ai/api/v1/credits", {
+        const res = await apiFetch("https://openrouter.ai/api/v1/credits", {
           headers: { Authorization: `Bearer ${apiKey}` },
         });
 
@@ -65,7 +66,7 @@ export function creditsCommand(): Command {
         console.log("");
       } catch (err) {
         spinner.fail("Failed to fetch credits");
-        console.error(chalk.red(String(err)));
+        console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }
     });

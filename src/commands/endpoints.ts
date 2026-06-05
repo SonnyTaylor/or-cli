@@ -2,6 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import { requireOpenRouterKey } from "../lib/config";
+import { apiFetch, formatNetworkError } from "../lib/fetch";
 import { getFormat, outputTable, formatPriceStr, truncate, formatPercent, formatCtx } from "../lib/format";
 import type { GlobalOptions } from "../lib/types";
 
@@ -78,7 +79,7 @@ export function endpointsCommand(): Command {
       const spinner = ora(`Fetching endpoints for ${modelId}...`).start();
 
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `https://openrouter.ai/api/v1/models/${modelId}/endpoints`,
           { headers: { Authorization: `Bearer ${apiKey}` } }
         );
@@ -185,7 +186,7 @@ export function endpointsCommand(): Command {
         }
       } catch (err) {
         spinner.fail("Failed to fetch endpoints");
-        console.error(chalk.red(String(err)));
+        console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }
     });

@@ -1,11 +1,12 @@
 import type { ORModel, ChatRequest, ChatResponse, ChatMessage } from "./types";
 import { getCached, setCache } from "./cache";
 import { getConfig } from "./config";
+import { apiFetch } from "./fetch";
 
 const BASE = "https://openrouter.ai/api/v1";
 
 async function orFetch<T>(path: string, apiKey: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await apiFetch(`${BASE}${path}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -69,7 +70,7 @@ export async function fetchModels(apiKey: string, noCache = false, sort?: string
       const results = await Promise.all(
         batch.map(async (m) => {
           try {
-            const res = await fetch(`${BASE}/models/${m.id}/endpoints`, {
+            const res = await apiFetch(`${BASE}/models/${m.id}/endpoints`, {
               headers: { Authorization: `Bearer ${apiKey}` },
             });
             if (!res.ok) return null;
@@ -127,7 +128,7 @@ export async function chatCompletionStream(
   request: ChatRequest,
   extraHeaders?: Record<string, string>
 ): Promise<ReadableStream<Uint8Array>> {
-  const res = await fetch(`${BASE}/chat/completions`, {
+  const res = await apiFetch(`${BASE}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,

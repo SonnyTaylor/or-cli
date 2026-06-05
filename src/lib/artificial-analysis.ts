@@ -1,6 +1,7 @@
 import type { AAModel, AAMediaModel, AAMediaEndpoint } from "./types";
 import { getCached, setCache } from "./cache";
 import { getConfig } from "./config";
+import { apiFetch } from "./fetch";
 
 const BASE = "https://artificialanalysis.ai/api/v2";
 
@@ -8,7 +9,7 @@ const BASE = "https://artificialanalysis.ai/api/v2";
 const AA_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 async function aaFetch<T>(path: string, apiKey: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await apiFetch(`${BASE}${path}`, {
     headers: {
       "x-api-key": apiKey,
     },

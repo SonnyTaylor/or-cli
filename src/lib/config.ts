@@ -19,6 +19,7 @@ export interface Config {
   defaultModel?: string;  // Fallback for all modalities
   defaultModels?: DefaultModels;  // Per-modality defaults
   cacheTtlMs: number; // default 6 hours
+  insecure?: boolean; // disable SSL verification (corporate DPI/proxy)
 }
 
 const DEFAULTS: Config = {
@@ -89,12 +90,18 @@ export function getORKey(): string | undefined {
 
 export function getDefaultModel(modality?: string): string | undefined {
   const config = getConfig();
-  
+
   // Check per-modality default first
   if (modality && config.defaultModels?.[modality as keyof DefaultModels]) {
     return config.defaultModels[modality as keyof DefaultModels];
   }
-  
+
   // Fall back to global default
   return config.defaultModel;
+}
+
+export function isInsecure(): boolean {
+  if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0") return true;
+  if (process.env.OR_CLI_INSECURE === "1") return true;
+  return getConfig().insecure ?? false;
 }

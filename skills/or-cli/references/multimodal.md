@@ -2,13 +2,15 @@
 
 The `or chat` command supports sending images, audio, video, and PDF files to compatible models.
 
+**Important: `or chat` handles INPUTS only (sending media TO a model). For OUTPUTS like generating speech audio, use the dedicated [`or tts`](tts.md) command.**
+
 ## Quick Reference
 
 ```bash
 # Image analysis
 or chat "What's in this image?" --image photo.jpg -m google/gemini-2.5-flash
 
-# Audio transcription
+# Audio transcription (STT — speech-to-text)
 or chat "Transcribe this audio" --audio recording.wav -m google/gemini-2.5-flash
 
 # Video summarization
@@ -19,6 +21,9 @@ or chat "Summarize this document" --pdf report.pdf -m google/gemini-2.5-flash
 
 # PDF analysis (URL)
 or chat "What are the main points?" --pdf https://example.com/paper.pdf -m anthropic/claude-sonnet-4
+
+# Text-to-speech (TTS — speech generation) — NOT via `or chat`
+or tts "Hello world" -o hello.mp3 -m hexgrad/kokoro-82m
 ```
 
 ## Supported File Types
@@ -29,6 +34,48 @@ or chat "What are the main points?" --pdf https://example.com/paper.pdf -m anthr
 | Audio | wav, mp3, m4a, flac, ogg, webm | `--audio <path>` |
 | Video | mp4, webm, mov, avi, mkv | `--video <path>` |
 | PDF | pdf (local or URL) | `--pdf <path>` |
+
+## Audio: Input vs Output
+
+Audio capabilities come in two completely different flavors:
+
+| Direction | Command | What it does | Example model |
+|-----------|---------|-------------|---------------|
+| **Input** (STT) | `or chat --audio` | Sends audio TO model, gets text BACK | `google/gemini-2.5-flash` |
+| **Output** (TTS) | `or tts` | Sends text TO endpoint, gets audio BACK | `hexgrad/kokoro-82m` |
+
+**Do not confuse these.** `or chat --audio` is for transcription/understanding. `or tts` is for speech synthesis. Models that do one rarely do the other through the same interface.
+
+### Finding Audio Input Models (STT)
+
+Models that accept audio input and return text:
+
+```bash
+# Any model with audio in its input modalities
+or models -t audio
+
+# Then read the description to confirm it's audio->text, not something else
+or show mistralai/voxtral-small-24b-2507
+or show nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+```
+
+Look for modality patterns like:
+- `text+file+audio->text` — takes audio, outputs text (transcription/understanding)
+- `text+image+audio+video->text` — multimodal understanding including audio
+
+### Finding Audio Output Models (TTS)
+
+Models that generate speech from text:
+
+```bash
+# Dedicated TTS models only
+or tts --list-models
+
+# Read description to confirm
+or show hexgrad/kokoro-82m
+```
+
+**Common trap:** `-t audio` includes music generation models like `google/lyria-3-*` which output songs, not speech. Always read the description.
 
 ## PDF Processing
 
@@ -80,7 +127,7 @@ Not all models support all input types. Always check first:
 # Vision models (image input)
 or models --vision
 
-# Audio-capable models
+# Audio-capable models (input or output — CHECK DESCRIPTION)
 or models -t audio
 
 # Video-capable models
@@ -101,8 +148,12 @@ or chat "What trends do you see in this chart?" --image chart.png -m google/gemi
 
 ### Audio Processing
 ```bash
+# Transcription (audio -> text)
 or chat "Transcribe this audio verbatim" --audio recording.wav -m google/gemini-2.5-flash --quiet
 or chat "Summarize the key points from this meeting" --audio meeting.mp3 -m google/gemini-2.5-flash --quiet
+
+# Speech synthesis (text -> audio) — use `or tts`, NOT `or chat`
+or tts "Welcome to the meeting" -m hexgrad/kokoro-82m -v af_bella -o welcome.mp3
 ```
 
 ### Video Understanding
@@ -150,3 +201,4 @@ or chat "Does this image match the document?" --pdf report.pdf --image chart.png
 - **Cost**: Multimodal inputs typically cost more than text-only due to token usage.
 - **Mistral OCR costs apply to all requests**: Including BYOK (OpenRouter uses its own key).
 - **Image limit**: OCR extracts at most 8 images per PDF (surplus images dropped, text preserved).
+- **Audio direction matters**: `--audio` sends audio TO the model (STT). `or tts` generates audio FROM text. Don't mix these up.

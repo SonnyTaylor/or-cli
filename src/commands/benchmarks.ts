@@ -5,6 +5,7 @@ import { getAAKey, getORKey } from "../lib/config";
 import { fetchLLMBenchmarks, fetchMediaBenchmarks } from "../lib/artificial-analysis";
 import { fetchModels, findORModelForAA, isImageGenModel } from "../lib/openrouter";
 import { getFormat, outputTable, formatPriceStr, formatTps, truncate } from "../lib/format";
+import { formatNetworkError } from "../lib/fetch";
 import type { AAMediaEndpoint, GlobalOptions, AAModel, ORModel } from "../lib/types";
 
 export function benchmarksCommand(): Command {
@@ -67,7 +68,7 @@ export function benchmarksCommand(): Command {
           spinner2.stop();
         } catch (err) {
           spinner2.fail("Failed to fetch OpenRouter models");
-          console.error(chalk.red(String(err)));
+          console.error(chalk.red(formatNetworkError(err)));
           process.exit(1);
         }
       }
@@ -84,7 +85,7 @@ export function benchmarksCommand(): Command {
         }
       } catch (err) {
         spinner.fail("Failed to fetch benchmarks");
-        console.error(chalk.red(String(err)));
+        console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }
     });

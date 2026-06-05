@@ -23,6 +23,7 @@ import {
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks, fetchMediaBenchmarks } from "../lib/artificial-analysis";
 import { getFormat, outputTable, formatPriceStr, formatPerImagePrice, truncate, modalityEmoji, formatCtx, error } from "../lib/format";
+import { formatNetworkError } from "../lib/fetch";
 import type { ORModel, AAModel, GlobalOptions } from "../lib/types";
 
 interface FilterOptions extends GlobalOptions {
@@ -191,7 +192,7 @@ export function modelsCommand(): Command {
         }
       } catch (err) {
         spinner.fail("Failed to fetch models");
-        error(String(err));
+        error(formatNetworkError(err));
         process.exit(1);
       }
     });

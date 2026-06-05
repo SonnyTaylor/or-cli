@@ -20,6 +20,23 @@ or show <model-id>                 # Full details with price ranges
 or compare id1 id2 id3             # Side-by-side
 ```
 
+## Critical: Read the Description
+
+**Always run `or show <model-id>` before using a model.** The name and modality tag are NOT enough.
+
+```bash
+or show hexgrad/kokoro-82m
+or show google/lyria-3-pro-preview
+or show mistralai/voxtral-small-24b-2507
+```
+
+Common traps:
+- `google/lyria-3-pro-preview` — generates **music/songs**, not speech
+- `mistralai/voxtral-small-24b-2507` — **speech-to-text** (listens to audio), not text-to-speech
+- `openai/gpt-audio-mini` — **chat completions** with audio, not the dedicated TTS endpoint
+
+**The description is the only reliable way to know what a model actually does.**
+
 ## Filtering Flags
 
 | Flag | What it does |
@@ -50,10 +67,12 @@ Use `-t` to filter by what you need:
 | Image generation | `-t image` | Text/image in, image out |
 | Image understanding | `--vision` | Image in, text out |
 | Embeddings | `-t embedding` | Text in, vector out |
-| Audio input | `-t audio` | Audio in (transcription, etc.) |
-| Audio generation | `-t audio-gen` | Text in, audio out (TTS) |
+| Audio input (STT) | `-t audio` | Models with audio input (check description) |
+| Audio generation (TTS) | `or tts --list-models` | Dedicated TTS models |
 | Video understanding | `-t video` | Video in, text out |
 | Reranking | `-t rerank` | Documents in, ranked out |
+
+**Important:** `-t audio` is ambiguous — it matches ANY model with audio capabilities (STT input, TTS output, music generation, audio understanding). Always read the description. For dedicated TTS models, use `or tts --list-models`.
 
 ## Output Formats
 
@@ -128,6 +147,7 @@ The `rankings` command shows real usage data from OpenRouter — how many tokens
 
 ## Important Notes
 
+- **Always read the description:** `or show <model-id>` before using. Names are misleading.
 - **Free models may have aggressive rate limits.** Always be prepared to fall back to a paid model.
 - **Model IDs include the provider prefix** — e.g. `deepseek/deepseek-v4-flash`, not just `deepseek-v4-flash`.
 - **Prices shown are "from" prices** — the cheapest provider. Use `or show` for price ranges.

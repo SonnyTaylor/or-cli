@@ -11,6 +11,7 @@ import {
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks } from "../lib/artificial-analysis";
 import { getFormat, outputTable, formatPriceStr, formatTps, formatCtx, formatDollars, estimateCost } from "../lib/format";
+import { formatNetworkError } from "../lib/fetch";
 import type { ORModel, AAModel, GlobalOptions } from "../lib/types";
 
 export function compareCommand(): Command {
@@ -179,7 +180,7 @@ export function compareCommand(): Command {
         outputTable(headers, rows, format);
       } catch (err) {
         spinner.fail("Failed to fetch models");
-        console.error(chalk.red(String(err)));
+        console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }
     });

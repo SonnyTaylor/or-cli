@@ -1,15 +1,44 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { getConfig, getORKey, getAAKey } from "../lib/config";
+import { getConfig, getORKey, getAAKey, isInsecure } from "../lib/config";
 import { readHistory } from "../lib/history";
 import { existsSync } from "fs";
 import { join } from "path";
 import { getConfigDir } from "../lib/config";
+import { apiFetch, isTlsError, isConnectError } from "../lib/fetch";
 
 interface CheckResult {
   label: string;
   ok: boolean;
   detail: string;
+}
+
+async function checkNetwork(): Promise<CheckResult> {
+  try {
+    const res = await apiFetch("https://openrouter.ai/api/v1/models?limit=1", {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok || res.status === 401) {
+      return { label: "Network (OpenRouter)", ok: true, detail: "Reachable" };
+    }
+    return { label: "Network (OpenRouter)", ok: true, detail: `HTTP ${res.status} (may need auth)` };
+  } catch (err) {
+    if (isTlsError(err)) {
+      return {
+        label: "Network (OpenRouter)",
+        ok: false,
+        detail: "SSL certificate error (corporate DPI/proxy?). Try `or config --insecure` or NODE_TLS_REJECT_UNAUTHORIZED=0",
+      };
+    }
+    if (isConnectError(err)) {
+      return {
+        label: "Network (OpenRouter)",
+        ok: false,
+        detail: "Cannot connect. Check internet / firewall / proxy.",
+      };
+    }
+    return { label: "Network (OpenRouter)", ok: false, detail: `Error: ${String(err).slice(0, 60)}` };
+  }
 }
 
 async function checkORKey(): Promise<CheckResult> {
@@ -20,7 +49,7 @@ async function checkORKey(): Promise<CheckResult> {
 
   // Test connectivity
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/models?limit=1", {
+    const res = await apiFetch("https://openrouter.ai/api/v1/models?limit=1", {
       headers: { Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(10000),
     });
@@ -29,6 +58,13 @@ async function checkORKey(): Promise<CheckResult> {
     }
     return { label: "OpenRouter API Key", ok: false, detail: `Invalid or expired (HTTP ${res.status})` };
   } catch (err) {
+    if (isTlsError(err)) {
+      return {
+        label: "OpenRouter API Key",
+        ok: true,
+        detail: `Set but SSL error (DPI/proxy?). Run with NODE_TLS_REJECT_UNAUTHORIZED=0 or \`or config --insecure\``,
+      };
+    }
     return { label: "OpenRouter API Key", ok: true, detail: `Set but could not verify (network error)` };
   }
 }
@@ -40,7 +76,7 @@ async function checkAAKey(): Promise<CheckResult> {
   }
 
   try {
-    const res = await fetch("https://artificialanalysis.ai/api/v2/data/llms/models", {
+    const res = await apiFetch("https://artificialanalysis.ai/api/v2/data/llms/models", {
       headers: { "x-api-key": key },
       signal: AbortSignal.timeout(10000),
     });
@@ -51,7 +87,14 @@ async function checkAAKey(): Promise<CheckResult> {
       return { label: "Artificial Analysis Key", ok: true, detail: `Valid but rate-limited (try again later)` };
     }
     return { label: "Artificial Analysis Key", ok: false, detail: `Invalid (HTTP ${res.status})` };
-  } catch {
+  } catch (err) {
+    if (isTlsError(err)) {
+      return {
+        label: "Artificial Analysis Key",
+        ok: true,
+        detail: `Set but SSL error (DPI/proxy?). Try NODE_TLS_REJECT_UNAUTHORIZED=0`,
+      };
+    }
     return { label: "Artificial Analysis Key", ok: true, detail: `Set but could not verify (network error)` };
   }
 }
@@ -107,8 +150,18 @@ export function doctorCommand(): Command {
       checks.push(checkHistory());
 
       // Async checks
+      checks.push(await checkNetwork());
       checks.push(await checkORKey());
       checks.push(await checkAAKey());
+
+      // SSL mode warning
+      if (isInsecure()) {
+        checks.push({
+          label: "SSL Verification",
+          ok: true,
+          detail: "Disabled (insecure mode) — connections may be vulnerable to MITM",
+        });
+      }
 
       // Print results
       const maxLabel = Math.max(...checks.map((c) => c.label.length));

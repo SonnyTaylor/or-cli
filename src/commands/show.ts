@@ -2,6 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import { requireOpenRouterKey, getAAKey } from "../lib/config";
+import { apiFetch, formatNetworkError } from "../lib/fetch";
 import {
   fetchModel,
   getModelModality,
@@ -51,7 +52,7 @@ export function showCommand(): Command {
         // Fetch model and endpoints in parallel
         const [model, endpointsRes] = await Promise.all([
           fetchModel(apiKey, modelId),
-          fetch(`https://openrouter.ai/api/v1/models/${modelId}/endpoints`, {
+          apiFetch(`https://openrouter.ai/api/v1/models/${modelId}/endpoints`, {
             headers: { Authorization: `Bearer ${apiKey}` },
           }).then((r) => (r.ok ? r.json() : null))
             .catch(() => null),
@@ -375,7 +376,7 @@ export function showCommand(): Command {
         }
       } catch (err) {
         spinner.fail("Failed to fetch model");
-        console.error(chalk.red(String(err)));
+        console.error(chalk.red(formatNetworkError(err)));
         process.exit(1);
       }
     });

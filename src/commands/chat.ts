@@ -5,6 +5,7 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs";
 import { resolve, extname, dirname } from "path";
 import { requireOpenRouterKey, getConfig, getDefaultModel } from "../lib/config";
 import { chatCompletion, chatCompletionStream, fetchModels, combinedPrice } from "../lib/openrouter";
+import { formatNetworkError } from "../lib/fetch";
 import { getFormat, error } from "../lib/format";
 import { appendHistory, generateId } from "../lib/history";
 import {
@@ -580,7 +581,7 @@ export function chatCommand(): Command {
           }
         }
       } catch (err) {
-        error(String(err));
+        error(formatNetworkError(err));
         process.exit(1);
       }
     });

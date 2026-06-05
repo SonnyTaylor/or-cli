@@ -16,6 +16,7 @@ import { doctorCommand } from "./commands/doctor";
 import { costCommand } from "./commands/cost";
 import { configCommand } from "./commands/config";
 import { conversationsCommand } from "./commands/conversations";
+import { ttsCommand } from "./commands/tts";
 
 const program = new Command();
 
@@ -41,5 +42,6 @@ program.addCommand(doctorCommand());
 program.addCommand(costCommand());
 program.addCommand(configCommand());
 program.addCommand(conversationsCommand());
+program.addCommand(ttsCommand());
 
 program.parse();

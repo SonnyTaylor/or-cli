@@ -2,6 +2,8 @@
 
 Use `or chat` to send single-shot messages to any model on OpenRouter. Supports text, images, audio, video, and PDF inputs. Also supports server tools (web search, web fetch, datetime) and quality-first routing.
 
+**`or chat` handles INPUTS only.** For generating outputs like images or speech, use the dedicated commands: [`or tts`](tts.md) for text-to-speech.
+
 ## Basic Usage
 
 ```bash
@@ -20,9 +22,9 @@ or chat "Write a haiku" -m google/gemini-2.5-flash --max-tokens 100
 | `--temperature <n>` | Creativity (0-2, default varies by model) |
 | `--reasoning-effort <level>` | Reasoning effort: low, medium, high |
 | `--show-reasoning` | Show reasoning/thinking output |
-| `--image <path>` | Send an image file (jpg, png, gif, webp) |
-| `--audio <path>` | Send an audio file (wav, mp3, m4a, flac) |
-| `--video <path>` | Send a video file (mp4, webm, mov) |
+| `--image <path>` | Send an image file for analysis |
+| `--audio <path>` | Send an audio file for transcription/understanding (STT) |
+| `--video <path>` | Send a video file for analysis |
 | `--pdf <path>` | Send a PDF file (local path or URL) |
 | `--pdf-engine <engine>` | PDF engine: native, cloudflare-ai, mistral-ocr |
 | `--web-search` | Enable web search server tool |
@@ -46,7 +48,7 @@ or chat "Write a haiku" -m google/gemini-2.5-flash --max-tokens 100
 # Image analysis
 or chat "What's in this image?" --image photo.jpg -m google/gemini-2.5-flash
 
-# Audio transcription
+# Audio transcription (STT — audio input, text output)
 or chat "Transcribe this audio" --audio recording.wav -m google/gemini-2.5-flash
 
 # Video summarization
@@ -61,6 +63,8 @@ or chat "What are the main points?" --pdf https://example.com/paper.pdf -m anthr
 # PDF with specific engine
 or chat "Extract text" --pdf scanned.pdf --pdf-engine mistral-ocr -m google/gemini-2.5-flash
 ```
+
+**Note:** `or chat` handles media INPUTS only. For generating audio output (TTS), use [`or tts`](tts.md).
 
 ## Server Tools
 
@@ -269,8 +273,10 @@ or history stats                   # Usage statistics
 
 - **Always specify a model with `-m`**. Without it, a default is used which may not be optimal.
 - **Find the right model first** — use `or models` to search, then pass the full model ID.
+- **Read model descriptions** with `or show <model-id>` before using. Names are misleading.
 - **Free models have rate limits.** If you get a 429, fall back to a paid model.
 - **`--quiet --no-stream`** is the most reliable pattern for agent pipelines.
 - **Server tools cost extra** — web search is $0.005/request (Exa/Parallel), web fetch is $0.001/fetch.
 - **PDF OCR costs** — Mistral OCR charges $0.001/1000 pages. Cloudflare AI is free.
 - **`:exacto` routing** may cost more than default routing (prioritizes quality over price).
+- **`--audio` is for INPUT only** — it sends audio to the model for transcription. For generating speech, use `or tts`.
