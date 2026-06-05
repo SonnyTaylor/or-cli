@@ -211,6 +211,33 @@ export type AAMediaEndpoint =
   | "text-to-video"
   | "image-to-video";
 
+// ── Rerank API Types ─────────────────────────────────────────────────────────
+
+export interface RerankRequest {
+  documents: string[];
+  model: string;
+  query: string;
+  top_n?: number;
+}
+
+export interface RerankResult {
+  document: { text: string };
+  index: number;
+  relevance_score: number;
+}
+
+export interface RerankResponse {
+  id: string;
+  model: string;
+  provider: string;
+  results: RerankResult[];
+  usage: {
+    cost: number;
+    search_units: number;
+    total_tokens: number;
+  };
+}
+
 // ── CLI Types ────────────────────────────────────────────────────────────────
 
 export type OutputFormat = "table" | "json" | "md";

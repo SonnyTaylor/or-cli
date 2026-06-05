@@ -17,13 +17,14 @@ import { costCommand } from "./commands/cost";
 import { configCommand } from "./commands/config";
 import { conversationsCommand } from "./commands/conversations";
 import { ttsCommand } from "./commands/tts";
+import { rerankCommand } from "./commands/rerank";
 
 const program = new Command();
 
 program
   .name("or")
   .description("CLI for OpenRouter — search models, send messages, view benchmarks")
-  .version("0.3.0");
+  .version("0.4.0");
 
 program.addCommand(authCommand());
 program.addCommand(chatCommand());
@@ -43,5 +44,6 @@ program.addCommand(costCommand());
 program.addCommand(configCommand());
 program.addCommand(conversationsCommand());
 program.addCommand(ttsCommand());
+program.addCommand(rerankCommand());
 
 program.parse();

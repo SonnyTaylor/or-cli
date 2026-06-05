@@ -412,6 +412,13 @@ export function isPerImagePriced(model: ORModel): boolean {
   return imagePrice > 0 && input === 0 && output === 0;
 }
 
+export async function rerank(apiKey: string, request: import("./types").RerankRequest): Promise<import("./types").RerankResponse> {
+  return orFetch<import("./types").RerankResponse>("/rerank", apiKey, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
 export function isSpeechModel(model: ORModel): boolean {
   const output = model.architecture?.output_modalities ?? [];
   if (output.length) {

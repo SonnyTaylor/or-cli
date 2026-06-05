@@ -24,6 +24,7 @@ Common traps:
 - **[Model Discovery](references/models.md)** — Browse, search, filter, and compare models. Find the right model for any task.
 - **[Chat & Completions](references/chat.md)** — Send messages, use reasoning, manage history, pipe output.
 - **[Text-to-Speech (TTS)](references/tts.md)** — Generate speech audio from text. **Uses a dedicated endpoint, not `or chat`.**
+- **[Rerank](references/rerank.md)** — Reorder documents by relevance to a query. **Uses a dedicated endpoint, not `or chat`.**
 - **[Benchmarks](references/benchmarks.md)** — Query Artificial Analysis benchmarks for LLMs, image gen, TTS, and video.
 - **[Image Models](references/image-gen.md)** — Generate images, edit images, and analyze images with vision models.
 - **[Multimodal](references/multimodal.md)** — Process images, audio, and video inputs.
@@ -62,6 +63,13 @@ or tts --list-models                          # Discover TTS models
 or tts --list-voices -m hexgrad/kokoro-82m    # List voices for a model
 or tts "Text" -m sesame/csm-1b -v conversational_a -o out.mp3
 
+# Rerank — dedicated endpoint, NOT via `or chat`
+or rerank "query" "doc1" "doc2" "doc3"           # Rerank documents by relevance
+or rerank "query" --file docs.txt               # Read documents from file
+or rerank "query" -m cohere/rerank-4-pro        # Use a specific rerank model
+cat docs.txt | or rerank "query"                # Pipe documents from stdin
+or rerank "query" doc1 doc2 --top-n 3           # Only show top 3 results
+
 # Conversations (multi-turn)
 or chat "What is 2+2?" --conversation -m <model>  # Start a conversation
 or chat "Now multiply by 10" --continue -m <model>  # Continue last conversation
@@ -97,6 +105,7 @@ or cost --by-day                    # Spending by day
 - **Benchmark model IDs ≠ OpenRouter model IDs.** Benchmarks from Artificial Analysis track models across many providers. Always use `or models -t <type>` to find actual OpenRouter IDs — don't assume a benchmark model name works with `or chat`.
 - **Vision ≠ Generation**: Vision models understand images (image→text). They don't create them.
 - **TTS ≠ Chat**: Text-to-speech uses a dedicated `/api/v1/audio/speech` endpoint via `or tts`, NOT `or chat`. See [references/tts.md](references/tts.md).
+- **Rerank ≠ Chat**: Reranking uses a dedicated `/api/v1/rerank` endpoint via `or rerank`, NOT `or chat`. See [references/rerank.md](references/rerank.md).
 - **`-t audio` is ambiguous** — it matches ALL audio-capable models (STT input, TTS output, music gen, audio understanding). Use `-t speech` or `or tts --list-models` for TTS specifically.
 - **Free models have rate limits.** If you get a 429, fall back to a paid model.
 - **`--quiet` only works on `or chat`** — other commands will warn and suggest `--json` instead.
