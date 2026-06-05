@@ -41,7 +41,7 @@ Common traps:
 
 | Flag | What it does |
 |------|-------------|
-| `-t, --type <type>` | Filter: `text`, `image`, `vision`, `embedding`, `audio`, `audio-gen`, `video`, `rerank`, `transcription` |
+| `-t, --type <type>` | Filter: `text`, `image`, `vision`, `embedding`, `audio`, `audio-gen`, `speech`, `video`, `rerank`, `transcription` |
 | `--tools` | Only models supporting tool/function calling |
 | `--reasoning` | Only reasoning models |
 | `--vision` | Only vision (image-input) models |
@@ -68,11 +68,11 @@ Use `-t` to filter by what you need:
 | Image understanding | `--vision` | Image in, text out |
 | Embeddings | `-t embedding` | Text in, vector out |
 | Audio input (STT) | `-t audio` | Models with audio input (check description) |
-| Audio generation (TTS) | `or tts --list-models` | Dedicated TTS models |
+| Audio generation (TTS) | `-t speech` / `or tts --list-models` | Dedicated TTS models |
 | Video understanding | `-t video` | Video in, text out |
 | Reranking | `-t rerank` | Documents in, ranked out |
 
-**Important:** `-t audio` is ambiguous — it matches ANY model with audio capabilities (STT input, TTS output, music generation, audio understanding). Always read the description. For dedicated TTS models, use `or tts --list-models`.
+**Important:** `-t audio` is ambiguous — it matches ANY model with audio capabilities (STT input, TTS output, music generation, audio understanding). Always read the description. For dedicated TTS models, use `-t speech` or `or tts --list-models`.
 
 ## Output Formats
 
@@ -151,6 +151,6 @@ The `rankings` command shows real usage data from OpenRouter — how many tokens
 - **Free models may have aggressive rate limits.** Always be prepared to fall back to a paid model.
 - **Model IDs include the provider prefix** — e.g. `deepseek/deepseek-v4-flash`, not just `deepseek-v4-flash`.
 - **Prices shown are "from" prices** — the cheapest provider. Use `or show` for price ranges.
-- **Some models aren't in the main list** (image gen, video, rerank, transcription). Use `or show <id>` to find them.
+- **All model types are fetched** (text, image, video, speech, audio, transcription, embeddings). Use `-t` to filter specific modalities.
 - **`~` prefix models** (e.g. `~anthropic/claude-sonnet-latest`) are aliases that auto-resolve to the latest version.
 - **`--quiet` is only supported on `or chat`** — use `--json` on other commands for piping.

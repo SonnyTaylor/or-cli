@@ -35,6 +35,7 @@ Common traps:
 or models                           # List all models
 or models "coding" --tools          # Search: tool-capable coding models
 or models -t text --sort price -n 10  # Top 10 cheapest text models
+or models -t speech -n 5            # Top 5 TTS models
 or models --new                     # Recently added models
 or models -f                        # Free models only
 or show <model-id>                  # Full details with price ranges
@@ -96,10 +97,10 @@ or cost --by-day                    # Spending by day
 - **Benchmark model IDs ≠ OpenRouter model IDs.** Benchmarks from Artificial Analysis track models across many providers. Always use `or models -t <type>` to find actual OpenRouter IDs — don't assume a benchmark model name works with `or chat`.
 - **Vision ≠ Generation**: Vision models understand images (image→text). They don't create them.
 - **TTS ≠ Chat**: Text-to-speech uses a dedicated `/api/v1/audio/speech` endpoint via `or tts`, NOT `or chat`. See [references/tts.md](references/tts.md).
-- **`-t audio` is ambiguous** — it matches ALL audio-capable models (STT input, TTS output, music gen, audio understanding). Use `or tts --list-models` for TTS specifically.
+- **`-t audio` is ambiguous** — it matches ALL audio-capable models (STT input, TTS output, music gen, audio understanding). Use `-t speech` or `or tts --list-models` for TTS specifically.
 - **Free models have rate limits.** If you get a 429, fall back to a paid model.
 - **`--quiet` only works on `or chat`** — other commands will warn and suggest `--json` instead.
-- **Use `--save <path>` for images** — don't try to extract images from `--json` output manually.
+- **Use `--save <path>` for images** — the CLI auto-sets `modalities` for image generation models.
 - **Use `--json` for piping** — all commands support `--json` for machine-readable output.
 - **Use `or rankings` for popularity** — this shows real usage data, not benchmarks.
 - **Use `or compare --cost-estimate`** — quickly see how much a model costs per typical coding session.

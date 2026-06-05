@@ -127,14 +127,15 @@ export function chatCommand(): Command {
 
       // Add PDF if provided
       if (opts.pdf) {
-        const pdfPath = resolve(opts.pdf);
-        if (pdfPath.startsWith("http://") || pdfPath.startsWith("https://")) {
+        const rawPdf = opts.pdf;
+        if (rawPdf.startsWith("http://") || rawPdf.startsWith("https://")) {
           // URL-based PDF
           contentParts.push({
             type: "file",
-            file: { filename: pdfPath.split("/").pop() || "document.pdf", file_data: pdfPath },
+            file: { filename: rawPdf.split("/").pop() || "document.pdf", file_data: rawPdf },
           });
         } else {
+          const pdfPath = resolve(rawPdf);
           // Local file - base64 encode
           if (!existsSync(pdfPath)) {
             error(`PDF not found: ${opts.pdf}`);
@@ -168,6 +169,17 @@ export function chatCommand(): Command {
       
       const useStream = opts.stream ?? (isTTY && !opts.json && !opts.quiet);
       const startTime = Date.now();
+
+      // ── Look up model info for modality detection ─────────────────────
+      let modelInfo: Awaited<ReturnType<typeof fetchModels>>[number] | undefined;
+      if (opts.save || opts.audio || opts.video || images.length > 0) {
+        try {
+          const allModels = await fetchModels(apiKey);
+          modelInfo = allModels.find((m) => m.id === model);
+        } catch {
+          // Continue without model info
+        }
+      }
 
       // ── Conversation context loading ──────────────────────────────────
       let conversationId: string | null = null;
@@ -270,6 +282,16 @@ export function chatCommand(): Command {
 
       if (plugins.length > 0) {
         request.plugins = plugins;
+      }
+
+      // ── Image generation requires modalities parameter ──────────────────
+      if (opts.save && modelInfo) {
+        const outputModalities = modelInfo.architecture?.output_modalities ?? [];
+        if (outputModalities.includes("image")) {
+          request.modalities = outputModalities.includes("text")
+            ? ["image", "text"]
+            : ["image"];
+        }
       }
 
       // ── Custom headers for server-side caching ──────────────────────────
@@ -487,19 +509,20 @@ export function chatCommand(): Command {
 
           // Save image if --save flag and images exist
           if (opts.save) {
-            const images = (respMessage as any)?.images ?? [];
-            if (images.length > 0) {
-              const img = images[0];
+            const respImages = (respMessage as any)?.images ?? [];
+            if (respImages.length > 0) {
+              const img = respImages[0];
               const url = img?.image_url?.url ?? img?.url ?? "";
               if (url.startsWith("data:")) {
                 const parts = url.split(",");
                 const b64 = parts[1] ?? "";
+                const mimeMatch = url.match(/^data:([^;]+);base64,/);
+                const mime = mimeMatch ? mimeMatch[1] : "image/png";
+                const isSvg = mime === "image/svg+xml";
                 const imgBuf = Buffer.from(b64, "base64");
                 let savePath = resolve(opts.save);
-                
+
                 // Auto-detect SVG content and fix extension
-                const contentStr = imgBuf.toString("utf-8");
-                const isSvg = contentStr.trimStart().startsWith("<svg") || contentStr.trimStart().startsWith("<?xml");
                 if (isSvg && !savePath.endsWith(".svg")) {
                   const newPath = savePath.replace(/\.(png|jpg|jpeg|webp|gif)$/i, ".svg");
                   if (!opts.quiet) {
@@ -507,7 +530,7 @@ export function chatCommand(): Command {
                   }
                   savePath = newPath;
                 }
-                
+
                 const dir = dirname(savePath);
                 if (!existsSync(dir)) {
                   mkdirSync(dir, { recursive: true });

@@ -9,7 +9,7 @@ Use `or chat` to send single-shot messages to any model on OpenRouter. Supports 
 ```bash
 or chat "What is the capital of France?"
 or chat "Explain monads" -m deepseek/deepseek-v4-flash
-or chat "Write a haiku" -m google/gemini-2.5-flash --max-tokens 100
+or chat "Write a haiku" -m xiaomi/mimo-v2.5 --max-tokens 100
 ```
 
 ## Flags
@@ -46,22 +46,22 @@ or chat "Write a haiku" -m google/gemini-2.5-flash --max-tokens 100
 
 ```bash
 # Image analysis
-or chat "What's in this image?" --image photo.jpg -m google/gemini-2.5-flash
+or chat "What's in this image?" --image photo.jpg -m xiaomi/mimo-v2.5
 
 # Audio transcription (STT — audio input, text output)
-or chat "Transcribe this audio" --audio recording.wav -m google/gemini-2.5-flash
+or chat "Transcribe this audio" --audio recording.wav -m xiaomi/mimo-v2.5
 
 # Video summarization
-or chat "Summarize this video" --video clip.mp4 -m google/gemini-2.5-flash
+or chat "Summarize this video" --video clip.mp4 -m xiaomi/mimo-v2.5
 
 # PDF analysis (local file)
-or chat "Summarize this document" --pdf report.pdf -m google/gemini-2.5-flash
+or chat "Summarize this document" --pdf report.pdf -m xiaomi/mimo-v2.5
 
 # PDF analysis (URL)
 or chat "What are the main points?" --pdf https://example.com/paper.pdf -m anthropic/claude-sonnet-4
 
 # PDF with specific engine
-or chat "Extract text" --pdf scanned.pdf --pdf-engine mistral-ocr -m google/gemini-2.5-flash
+or chat "Extract text" --pdf scanned.pdf --pdf-engine mistral-ocr -m xiaomi/mimo-v2.5
 ```
 
 **Note:** `or chat` handles media INPUTS only. For generating audio output (TTS), use [`or tts`](tts.md).
@@ -127,10 +127,10 @@ OpenRouter caches identical requests. Cache hits are **free** (no tokens charged
 
 ```bash
 # Enable caching for a request
-or chat "What is 2+2?" --server-cache -m google/gemini-2.5-flash
+or chat "What is 2+2?" --server-cache -m xiaomi/mimo-v2.5
 
 # Set custom TTL (default 300 seconds)
-or chat "What is 2+2?" --server-cache --server-cache-ttl 600 -m google/gemini-2.5-flash
+or chat "What is 2+2?" --server-cache --server-cache-ttl 600 -m xiaomi/mimo-v2.5
 
 # First request: cache MISS (billed normally)
 # Second identical request: cache HIT (free!)
@@ -148,7 +148,7 @@ The response healing plugin auto-fixes malformed JSON from models.
 
 ```bash
 # Enable healing for structured output
-or chat "Generate a product listing" --heal --json -m google/gemini-2.5-flash
+or chat "Generate a product listing" --heal --json -m xiaomi/mimo-v2.5
 ```
 
 What it fixes:
@@ -227,17 +227,17 @@ or chat "Generate a README" --quiet --no-stream > README.md
 or chat "List 3 colors" --json --no-stream
 
 # Generate and save image
-or chat "Generate a logo" -m google/gemini-2.5-flash-image --save logo.png --no-stream
+or chat "Generate a logo" -m black-forest-labs/flux.2-pro --save logo.png --no-stream
 
 # Edit image and save result
-or chat "Replace window with door" --image input.jpg -m google/gemini-2.5-flash-image --save output.png --no-stream
+or chat "Replace window with door" --image input.jpg -m black-forest-labs/flux.2-pro --save output.png --no-stream
 
 # PDF with web search — comprehensive research
 or chat "Analyze this PDF and search for related work" --pdf paper.pdf --web-search -m openai/gpt-5.2
 
 # Cached repeated queries
-or chat "Explain TCP" --server-cache -m google/gemini-2.5-flash  # First: MISS (billed)
-or chat "Explain TCP" --server-cache -m google/gemini-2.5-flash  # Second: HIT (free!)
+or chat "Explain TCP" --server-cache -m xiaomi/mimo-v2.5  # First: MISS (billed)
+or chat "Explain TCP" --server-cache -m xiaomi/mimo-v2.5  # Second: HIT (free!)
 ```
 
 ## Output Metrics
@@ -245,7 +245,7 @@ or chat "Explain TCP" --server-cache -m google/gemini-2.5-flash  # Second: HIT (
 By default, `or chat` prints detailed metrics after the response:
 
 ```
-  1303 tokens (4 in / 1299 out) • 186 tps • 7.0s • $0.0387 • google/gemini-2.5-flash-image • Google • 1290 img tokens
+  1303 tokens (4 in / 1299 out) • 186 tps • 7.0s • $0.0387 • black-forest-labs/flux.2-pro
 ```
 
 Metrics include:

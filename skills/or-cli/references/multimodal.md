@@ -8,16 +8,16 @@ The `or chat` command supports sending images, audio, video, and PDF files to co
 
 ```bash
 # Image analysis
-or chat "What's in this image?" --image photo.jpg -m google/gemini-2.5-flash
+or chat "What's in this image?" --image photo.jpg -m xiaomi/mimo-v2.5
 
 # Audio transcription (STT — speech-to-text)
-or chat "Transcribe this audio" --audio recording.wav -m google/gemini-2.5-flash
+or chat "Transcribe this audio" --audio recording.wav -m xiaomi/mimo-v2.5
 
 # Video summarization
-or chat "Summarize this video" --video clip.mp4 -m google/gemini-2.5-flash
+or chat "Summarize this video" --video clip.mp4 -m xiaomi/mimo-v2.5
 
 # PDF analysis (local file)
-or chat "Summarize this document" --pdf report.pdf -m google/gemini-2.5-flash
+or chat "Summarize this document" --pdf report.pdf -m xiaomi/mimo-v2.5
 
 # PDF analysis (URL)
 or chat "What are the main points?" --pdf https://example.com/paper.pdf -m anthropic/claude-sonnet-4
@@ -41,7 +41,7 @@ Audio capabilities come in two completely different flavors:
 
 | Direction | Command | What it does | Example model |
 |-----------|---------|-------------|---------------|
-| **Input** (STT) | `or chat --audio` | Sends audio TO model, gets text BACK | `google/gemini-2.5-flash` |
+| **Input** (STT) | `or chat --audio` | Sends audio TO model, gets text BACK | `xiaomi/mimo-v2.5` |
 | **Output** (TTS) | `or tts` | Sends text TO endpoint, gets audio BACK | `hexgrad/kokoro-82m` |
 
 **Do not confuse these.** `or chat --audio` is for transcription/understanding. `or tts` is for speech synthesis. Models that do one rarely do the other through the same interface.
@@ -91,13 +91,13 @@ PDFs are processed server-side by OpenRouter. Works with **any model** — even 
 
 ```bash
 # Let OpenRouter pick the best engine (default)
-or chat "Summarize this" --pdf document.pdf -m google/gemini-2.5-flash
+or chat "Summarize this" --pdf document.pdf -m xiaomi/mimo-v2.5
 
 # Force native processing (for models that support it)
 or chat "Summarize this" --pdf document.pdf --pdf-engine native -m openai/gpt-4o
 
 # Use Mistral OCR for scanned documents
-or chat "Extract text from this scan" --pdf scanned.pdf --pdf-engine mistral-ocr -m google/gemini-2.5-flash
+or chat "Extract text from this scan" --pdf scanned.pdf --pdf-engine mistral-ocr -m xiaomi/mimo-v2.5
 
 # Use Cloudflare AI (free, good for text-heavy PDFs)
 or chat "Summarize this" --pdf paper.pdf --pdf-engine cloudflare-ai -m deepseek/deepseek-v4-flash
@@ -134,23 +134,23 @@ or models -t audio
 or models -t video
 
 # Check a specific model
-or show google/gemini-2.5-flash
+or show xiaomi/mimo-v2.5
 ```
 
 ## Use Cases
 
 ### Image Analysis
 ```bash
-or chat "Describe this image in detail" --image screenshot.png -m google/gemini-2.5-flash --quiet
-or chat "Extract all text from this image" --image document.jpg -m google/gemini-2.5-flash --quiet
-or chat "What trends do you see in this chart?" --image chart.png -m google/gemini-2.5-flash --quiet
+or chat "Describe this image in detail" --image screenshot.png -m xiaomi/mimo-v2.5 --quiet
+or chat "Extract all text from this image" --image document.jpg -m xiaomi/mimo-v2.5 --quiet
+or chat "What trends do you see in this chart?" --image chart.png -m xiaomi/mimo-v2.5 --quiet
 ```
 
 ### Audio Processing
 ```bash
 # Transcription (audio -> text)
-or chat "Transcribe this audio verbatim" --audio recording.wav -m google/gemini-2.5-flash --quiet
-or chat "Summarize the key points from this meeting" --audio meeting.mp3 -m google/gemini-2.5-flash --quiet
+or chat "Transcribe this audio verbatim" --audio recording.wav -m xiaomi/mimo-v2.5 --quiet
+or chat "Summarize the key points from this meeting" --audio meeting.mp3 -m xiaomi/mimo-v2.5 --quiet
 
 # Speech synthesis (text -> audio) — use `or tts`, NOT `or chat`
 or tts "Welcome to the meeting" -m hexgrad/kokoro-82m -v af_bella -o welcome.mp3
@@ -158,8 +158,8 @@ or tts "Welcome to the meeting" -m hexgrad/kokoro-82m -v af_bella -o welcome.mp3
 
 ### Video Understanding
 ```bash
-or chat "Summarize what happens in this video" --video clip.mp4 -m google/gemini-2.5-flash --quiet
-or chat "Describe the main scenes" --video presentation.mp4 -m google/gemini-2.5-flash --quiet
+or chat "Summarize what happens in this video" --video clip.mp4 -m xiaomi/mimo-v2.5 --quiet
+or chat "Describe the main scenes" --video presentation.mp4 -m xiaomi/mimo-v2.5 --quiet
 ```
 
 ### PDF Analysis
@@ -171,7 +171,7 @@ or chat "Explain the methodology" --pdf paper.pdf -m anthropic/claude-sonnet-4
 or chat "What were the revenue figures?" --pdf annual-report.pdf -m openai/gpt-4o
 
 # Scanned document (use OCR)
-or chat "Extract all text" --pdf scanned.pdf --pdf-engine mistral-ocr -m google/gemini-2.5-flash
+or chat "Extract all text" --pdf scanned.pdf --pdf-engine mistral-ocr -m xiaomi/mimo-v2.5
 
 # Compare multiple PDFs (send them sequentially)
 or chat "Compare these two contracts" --pdf contract1.pdf -m anthropic/claude-sonnet-4
@@ -187,10 +187,22 @@ You can send multiple file types in a single request:
 
 ```bash
 # Image + text question
-or chat "What does this diagram show?" --image diagram.png -m google/gemini-2.5-flash
+or chat "What does this diagram show?" --image diagram.png -m xiaomi/mimo-v2.5
 
 # PDF + image
-or chat "Does this image match the document?" --pdf report.pdf --image chart.png -m google/gemini-2.5-flash
+or chat "Does this image match the document?" --pdf report.pdf --image chart.png -m xiaomi/mimo-v2.5
+```
+
+## Conversations with Multimodal Inputs
+
+Multimodal inputs work with `--conversation` and `--continue`:
+
+```bash
+# Start a conversation with an image
+or chat "Describe this" --image photo.jpg --conversation -m xiaomi/mimo-v2.5
+
+# Continue the conversation (model remembers the image context)
+or chat "What color was the sky?" --continue -m xiaomi/mimo-v2.5
 ```
 
 ## Important Notes

@@ -16,14 +16,17 @@ export interface ORModel {
     is_moderated: boolean;
   };
   architecture: {
-    modality: string;
+    modality: string | null;
     tokenizer: string;
-    instruct_type?: string;
+    instruct_type?: string | null;
+    input_modalities?: string[];
+    output_modalities?: string[];
   };
   supported_parameters: string[];
+  supported_voices?: string[] | null;
   created: number;
-  expiration_date?: string; // YYYY-MM-DD format, model is going away
-  knowledge_cutoff?: string;
+  expiration_date?: string | null; // YYYY-MM-DD format, model is going away
+  knowledge_cutoff?: string | null;
 }
 
 export interface ORProvider {
@@ -74,6 +77,22 @@ export interface ChatRequest {
   stop?: string | string[];
   response_format?: { type: "json_object" | "json_schema"; json_schema?: object };
   reasoning?: { effort: "low" | "medium" | "high" };
+  modalities?: string[];
+  audio?: { voice: string; format: string };
+  plugins?: any[];
+  tools?: any[];
+  tool_choice?: any;
+  image_config?: {
+    aspect_ratio?: string;
+    image_size?: string;
+    strength?: number;
+    style?: string;
+    rgb_colors?: number[][];
+    background_rgb_color?: number[];
+    text_layout?: any[];
+    font_inputs?: any[];
+    super_resolution_references?: string[];
+  };
 }
 
 export interface ChatResponse {
@@ -85,6 +104,8 @@ export interface ChatResponse {
       role: string;
       content: string;
       reasoning?: string;
+      images?: { type: string; image_url: { url: string } }[];
+      annotations?: any[];
     };
     finish_reason: string;
   }[];
@@ -92,8 +113,13 @@ export interface ChatResponse {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
+    cost?: number;
+    cache_status?: string;
+    completion_tokens_details?: { image_tokens?: number; reasoning_tokens?: number };
+    prompt_tokens_details?: { cached_tokens?: number };
   };
   provider?: string;
+  cache?: { status: string };
 }
 
 // ── Artificial Analysis API Types ────────────────────────────────────────────
@@ -118,6 +144,11 @@ export interface AAModel {
     scicode?: number;
     math_500?: number;
     aime?: number;
+    aime_25?: number;
+    ifbench?: number;
+    lcr?: number;
+    terminalbench_hard?: number;
+    tau2?: number;
   };
   pricing: {
     price_1m_blended_3_to_1?: number;

@@ -74,7 +74,7 @@ export function conversationsCommand(): Command {
 
       console.log("");
       console.log(chalk.bold.underline(`Conversation: ${id}`));
-      console.log(chalk.dim(`  Started: ${entries[0].timestamp}`));
+      console.log(chalk.dim(`  Started: ${entries[0]!.timestamp}`));
       console.log("");
 
       // Track session totals

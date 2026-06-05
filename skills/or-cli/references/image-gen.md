@@ -75,24 +75,24 @@ or benchmarks --type image-editing --sort score -n 10
 
 ```bash
 # Generate and save image
-or chat "Generate a logo of a mountain" -m google/gemini-2.5-flash-image --save logo.png --no-stream
+or chat "Generate a logo of a mountain" -m black-forest-labs/flux.2-pro --save logo.png --no-stream
 
 # Edit image and save
-or chat "Replace the window with a door" --image input.jpg -m google/gemini-2.5-flash-image --save output.png --no-stream
+or chat "Replace the window with a door" --image input.jpg -m black-forest-labs/flux.2-pro --save output.png --no-stream
 
 # Understand (text output only)
 or chat "Describe this photo" -m openai/gpt-4o --image photo.jpg --quiet
 
 # OCR
-or chat "Extract all text" -m google/gemini-2.5-flash --image document.jpg --quiet
+or chat "Extract all text" -m xiaomi/mimo-v2.5 --image document.jpg --quiet
 ```
 
 ## Saving Generated Images
 
-Use `--save <path>` to save images directly to disk:
+Use `--save <path>` to save images directly to disk. The CLI automatically sets the required `modalities` parameter based on the model's capabilities:
 
 ```bash
-or chat "Generate a red circle" -m google/gemini-2.5-flash-image --save circle.png --no-stream
+or chat "Generate a red circle" -m black-forest-labs/flux.2-pro --save circle.png --no-stream
 ```
 
 Output:
@@ -100,7 +100,7 @@ Output:
 ✓ Image saved to /path/to/circle.png (180KB)
 Sure, here's your red circle:
 
-  1313 tokens (8 in / 1305 out) • 224 tps • 5.8s • $0.0387 • google/gemini-2.5-flash-image • Google • 1290 img tokens
+  1313 tokens (8 in / 1305 out) • 224 tps • 5.8s • $0.0387 • black-forest-labs/flux.2-pro
 ```
 
 The `--save` flag:

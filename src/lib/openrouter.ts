@@ -34,19 +34,32 @@ export async function fetchModels(apiKey: string, noCache = false, sort?: string
     if (cached) return cached;
   }
 
-  // Fetch models in parallel: main list, embeddings, and image models
+  // Fetch models in parallel: main list, embeddings, and specialized output modalities
+  // The default /models only returns text-output models; we need to explicitly fetch others
   const mainPath = sort ? `/models?sort=${sort}` : '/models';
-  const [mainRes, embeddingsRes, imageRes] = await Promise.all([
+  const [mainRes, embeddingsRes, imageRes, videoRes, speechRes, audioRes, transcriptionRes] = await Promise.all([
     orFetch<{ data: ORModel[] }>(mainPath, apiKey),
     orFetch<{ data: ORModel[] }>("/embeddings/models", apiKey).catch(() => ({ data: [] })),
     orFetch<{ data: ORModel[] }>("/models?output_modalities=image", apiKey).catch(() => ({ data: [] })),
+    orFetch<{ data: ORModel[] }>("/models?output_modalities=video", apiKey).catch(() => ({ data: [] })),
+    orFetch<{ data: ORModel[] }>("/models?output_modalities=speech", apiKey).catch(() => ({ data: [] })),
+    orFetch<{ data: ORModel[] }>("/models?output_modalities=audio", apiKey).catch(() => ({ data: [] })),
+    orFetch<{ data: ORModel[] }>("/models?output_modalities=transcription", apiKey).catch(() => ({ data: [] })),
   ]);
 
   // Merge and deduplicate by id
   const seen = new Set<string>();
   const models: ORModel[] = [];
 
-  for (const m of [...mainRes.data, ...embeddingsRes.data, ...imageRes.data]) {
+  for (const m of [
+    ...mainRes.data,
+    ...embeddingsRes.data,
+    ...imageRes.data,
+    ...videoRes.data,
+    ...speechRes.data,
+    ...audioRes.data,
+    ...transcriptionRes.data,
+  ]) {
     if (!seen.has(m.id)) {
       seen.add(m.id);
       models.push(m);
@@ -158,71 +171,112 @@ export function modelMatchesSearch(model: ORModel, query: string): boolean {
 }
 
 export function getModelModality(model: ORModel): string {
+  // Prefer the structured modality arrays; fallback to legacy string
+  const input = model.architecture?.input_modalities ?? [];
+  const output = model.architecture?.output_modalities ?? [];
+  if (input.length || output.length) {
+    return `${input.join("+") || "text"}->${output.join("+") || "text"}`;
+  }
   return model.architecture?.modality ?? "text->text";
 }
 
 export function isTextModel(model: ORModel): boolean {
+  const output = model.architecture?.output_modalities ?? [];
+  const input = model.architecture?.input_modalities ?? [];
+  if (output.length || input.length) {
+    return output.includes("text") && !input.includes("image") && !input.includes("audio") && !input.includes("video");
+  }
+  // Fallback to legacy string parsing
   const mod = getModelModality(model);
-  // Output is text, input is text-only
-  const [input, output] = mod.split("->");
-  return output?.includes("text") && !input?.includes("image") && !input?.includes("audio");
+  const [inStr, outStr] = mod.split("->");
+  return (outStr?.includes("text") ?? false) && !(inStr?.includes("image") ?? false) && !(inStr?.includes("audio") ?? false);
 }
 
 export function isVisionModel(model: ORModel): boolean {
+  const input = model.architecture?.input_modalities ?? [];
+  const output = model.architecture?.output_modalities ?? [];
+  if (input.length || output.length) {
+    return input.includes("image") && output.includes("text");
+  }
+  // Fallback to legacy string parsing
   const mod = getModelModality(model);
-  // Accepts image input but outputs text
-  const [input, output] = mod.split("->");
-  return (input?.includes("image") ?? false) && (output?.includes("text") ?? false);
+  const [inStr, outStr] = mod.split("->");
+  return (inStr?.includes("image") ?? false) && (outStr?.includes("text") ?? false);
 }
 
 export function isImageGenModel(model: ORModel): boolean {
+  const output = model.architecture?.output_modalities ?? [];
+  if (output.length) {
+    return output.includes("image");
+  }
+  // Fallback to legacy string parsing
   const mod = getModelModality(model);
-  // Output includes image (text->image or text+image->image)
-  const [input, output] = mod.split("->");
-  return output?.includes("image") ?? false;
+  return mod.includes("->image") || mod.includes("+image");
 }
 
 export function isEmbeddingModel(model: ORModel): boolean {
+  const output = model.architecture?.output_modalities ?? [];
+  if (output.length) {
+    return output.includes("embeddings");
+  }
   const mod = getModelModality(model);
   return mod.includes("embedding") || mod.includes("embeddings") || model.id.includes("embed");
 }
 
 export function isRerankModel(model: ORModel): boolean {
+  const output = model.architecture?.output_modalities ?? [];
+  if (output.length) {
+    return output.includes("rerank");
+  }
   const mod = getModelModality(model);
   return mod.includes("rerank") || model.id.includes("rerank");
 }
 
 export function isTranscriptionModel(model: ORModel): boolean {
+  const output = model.architecture?.output_modalities ?? [];
+  const input = model.architecture?.input_modalities ?? [];
+  if (output.length || input.length) {
+    return output.includes("transcription") || (input.includes("audio") && output.includes("text") && model.id.includes("whisper"));
+  }
   const mod = getModelModality(model);
-  const [input, output] = mod.split("->");
+  const [inStr, outStr] = mod.split("->");
   return (
     mod.includes("transcription") ||
     model.id.includes("whisper") ||
     model.id.includes("transcri") ||
-    ((input?.includes("audio") ?? false) && (output?.includes("text") ?? false))
+    ((inStr?.includes("audio") ?? false) && (outStr?.includes("text") ?? false))
   );
 }
 
 export function isAudioModel(model: ORModel): boolean {
+  const output = model.architecture?.output_modalities ?? [];
+  const input = model.architecture?.input_modalities ?? [];
+  if (output.length || input.length) {
+    return output.includes("audio") || input.includes("audio") || output.includes("speech");
+  }
   const mod = getModelModality(model);
-  const [input, output] = mod.split("->");
-  // Audio generation: output includes audio
-  // Audio input (STT): input includes audio
-  return (output?.includes("audio") ?? false) || (input?.includes("audio") ?? false);
+  const [inStr, outStr] = mod.split("->");
+  return (outStr?.includes("audio") ?? false) || (inStr?.includes("audio") ?? false);
 }
 
 export function isAudioGenModel(model: ORModel): boolean {
+  const output = model.architecture?.output_modalities ?? [];
+  if (output.length) {
+    return output.includes("audio") || output.includes("speech");
+  }
   const mod = getModelModality(model);
-  const output = mod.split("->")[1];
-  return output?.includes("audio") ?? false;
+  return mod.includes("->audio") || mod.includes("+audio") || mod.includes("->speech") || mod.includes("+speech");
 }
 
 export function isVideoModel(model: ORModel): boolean {
+  const output = model.architecture?.output_modalities ?? [];
+  const input = model.architecture?.input_modalities ?? [];
+  if (output.length || input.length) {
+    return output.includes("video") || input.includes("video");
+  }
   const mod = getModelModality(model);
-  const [input, output] = mod.split("->");
-  // Video generation would have video in output
-  // Video understanding has video in input
-  return (output?.includes("video") ?? false) || (input?.includes("video") ?? false);
+  const [inStr, outStr] = mod.split("->");
+  return (outStr?.includes("video") ?? false) || (inStr?.includes("video") ?? false);
 }
 
 export function hasTools(model: ORModel): boolean {
@@ -341,6 +395,14 @@ export function isPerImagePriced(model: ORModel): boolean {
   const input = parseFloat(model.pricing?.prompt ?? "0");
   const output = parseFloat(model.pricing?.completion ?? "0");
   return imagePrice > 0 && input === 0 && output === 0;
+}
+
+export function isSpeechModel(model: ORModel): boolean {
+  const output = model.architecture?.output_modalities ?? [];
+  if (output.length) {
+    return output.includes("speech");
+  }
+  return model.id.includes("tts") || model.id.includes("speech") || getModelModality(model).includes("speech");
 }
 
 export function getPerImagePrice(model: ORModel): number | null {

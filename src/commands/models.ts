@@ -17,6 +17,7 @@ import {
   isVideoModel,
   isRerankModel,
   isTranscriptionModel,
+  isSpeechModel,
   combinedPrice,
   isPerImagePriced,
   getPerImagePrice,
@@ -220,11 +221,12 @@ function filterByType(models: ORModel[], type: string): ORModel[] {
     });
     case "audio-out": return models.filter(isAudioGenModel);
     case "audio-gen": return models.filter(isAudioGenModel);
+    case "speech": case "tts": return models.filter(isSpeechModel);
     case "video": return models.filter(isVideoModel);
     case "rerank": return models.filter(isRerankModel);
     case "transcription": case "stt": return models.filter(isTranscriptionModel);
     default:
-      console.log(chalk.yellow(`Unknown type "${type}". Valid: text, image, vision, embedding, audio, audio-in, audio-out, audio-gen, video, rerank, transcription`));
+      console.log(chalk.yellow(`Unknown type "${type}". Valid: text, image, vision, embedding, audio, audio-in, audio-out, audio-gen, speech, video, rerank, transcription`));
       return models;
   }
 }

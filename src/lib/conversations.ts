@@ -141,7 +141,7 @@ export function loadConversation(id: string): ConversationEntry[] {
 export function toMessages(entries: ConversationEntry[]): ChatMessage[] {
   return entries.map((e) => ({
     role: e.role as ChatMessage["role"],
-    content: typeof e.content === "string" ? e.content : JSON.stringify(e.content),
+    content: e.content,
   }));
 }
 
@@ -158,7 +158,7 @@ export function getLastConversationId(): string | null {
     }))
     .sort((a, b) => b.time - a.time);
 
-  return files.length > 0 ? files[0].name : null;
+  return files.length > 0 ? files[0]!.name : null;
 }
 
 /**
@@ -175,7 +175,7 @@ export function listConversations(limit?: number): ConversationMeta[] {
 
     const firstUser = entries.find((e) => e.role === "user");
     const firstAssistant = entries.find((e) => e.role === "assistant");
-    const lastEntry = entries[entries.length - 1];
+    const lastEntry = entries[entries.length - 1]!;
 
     // Extract model from first assistant response
     const model = firstAssistant?.model ?? "unknown";
@@ -191,7 +191,7 @@ export function listConversations(limit?: number): ConversationMeta[] {
 
     return {
       id,
-      createdAt: entries[0].timestamp,
+      createdAt: entries[0]!.timestamp,
       updatedAt: lastEntry.timestamp,
       model,
       messageCount,
