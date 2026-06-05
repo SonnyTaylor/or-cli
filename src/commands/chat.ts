@@ -190,17 +190,17 @@ export function chatCommand(): Command {
             attachments.length > 0
               ? `Chatting with ${chalk.cyan(model)} (${attachments.join(", ")})...`
               : `Chatting with ${chalk.cyan(model)}...`;
-          const spinner = ora({ text: spinnerText, spinner: "dots" }).start();
+          const spinner = opts.quiet ? null : ora({ text: spinnerText, spinner: "dots" }).start();
 
           const result = await handleStream(apiKey, request, extraHeaders, {
             showReasoning: opts.showReasoning,
             onChunk: (text) => {
-              spinner.stop();
+              spinner?.stop();
               process.stdout.write(text);
             },
           });
 
-          spinner.stop();
+          spinner?.stop();
 
           if (isTty && !result.fullText.endsWith("\n")) {
             process.stdout.write("\n");
@@ -275,11 +275,11 @@ export function chatCommand(): Command {
             attachments.length > 0
               ? `Chatting with ${chalk.cyan(model)} (${attachments.join(", ")})...`
               : `Chatting with ${chalk.cyan(model)}...`;
-          const spinner = ora({ text: spinnerText, spinner: "dots" }).start();
+          const spinner = opts.quiet ? null : ora({ text: spinnerText, spinner: "dots" }).start();
 
           const result = await handleNonStream(apiKey, request, extraHeaders);
           const latencyMs = Date.now() - startTime;
-          spinner.stop();
+          spinner?.stop();
 
           const respMessage = result.response.choices?.[0]?.message;
           const content = respMessage?.content ?? "";

@@ -67,10 +67,10 @@ export function embedCommand(): Command {
 
       // ── List models ─────────────────────────────────────────────────
       if (opts.listModels) {
-        const spinner = ora("Fetching embedding models...").start();
+        const spinner = opts.quiet ? null : ora("Fetching embedding models...").start();
         try {
           const models = await fetchEmbeddingModels(apiKey);
-          spinner.stop();
+          spinner?.stop();
 
           if (format === "json") {
             console.log(JSON.stringify(models, null, 2));
@@ -94,7 +94,7 @@ export function embedCommand(): Command {
           console.log("");
           return;
         } catch (err) {
-          spinner.fail("Failed to fetch models");
+          spinner?.fail("Failed to fetch models");
           error(formatNetworkError(err));
           process.exit(1);
         }
