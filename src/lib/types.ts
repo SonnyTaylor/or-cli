@@ -116,6 +116,32 @@ export interface ChatRequest {
   };
 }
 
+// Dedicated image-generation endpoint (POST /api/v1/images). Distinct from the
+// chat/completions image path — the OpenAI gpt-image-* family is only served here.
+export interface ImagesRequest {
+  model: string;
+  prompt: string;
+  n?: number;
+  aspect_ratio?: string;
+  size?: string;
+  resolution?: string;
+  quality?: "auto" | "low" | "medium" | "high";
+  output_format?: "png" | "jpeg" | "webp" | "svg";
+  background?: "auto" | "transparent" | "opaque";
+  seed?: number;
+}
+
+export interface ImagesResponse {
+  created?: number;
+  data?: Array<{ b64_json?: string; media_type?: string; url?: string }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    cost?: number;
+  };
+}
+
 export interface ChatResponse {
   id: string;
   model: string;

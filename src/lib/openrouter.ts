@@ -1,4 +1,4 @@
-import type { ORModel, ChatRequest, ChatResponse, ChatMessage } from "./types";
+import type { ORModel, ChatRequest, ChatResponse, ChatMessage, ImagesRequest, ImagesResponse } from "./types";
 import { getCached, setCache } from "./cache";
 import { getConfig } from "./config";
 import { apiFetch } from "./fetch";
@@ -137,6 +137,18 @@ export async function chatCompletion(
   return orFetch<ChatResponse>("/chat/completions", apiKey, {
     method: "POST",
     body: JSON.stringify({ ...request, stream: false }),
+    headers: extraHeaders,
+  });
+}
+
+export async function imageGeneration(
+  apiKey: string,
+  body: ImagesRequest,
+  extraHeaders?: Record<string, string>
+): Promise<ImagesResponse> {
+  return orFetch<ImagesResponse>("/images", apiKey, {
+    method: "POST",
+    body: JSON.stringify(body),
     headers: extraHeaders,
   });
 }

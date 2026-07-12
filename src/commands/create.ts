@@ -7,11 +7,92 @@ import { requireOpenRouterKey, getDefaultModel } from "../lib/config";
 import { getFormat, error, formatDollars } from "../lib/format";
 import { formatNetworkError } from "../lib/fetch";
 import { apiFetch } from "../lib/fetch";
-import { fetchModels, isImageGenModel, isVideoModel, isSpeechModel } from "../lib/openrouter";
+import { fetchModels, isImageGenModel, isVideoModel, isSpeechModel, imageGeneration } from "../lib/openrouter";
 import { buildMessages, buildRequest, buildExtraHeaders, handleNonStream, getMimeType, IMAGE_EXTS, readStdin } from "../lib/chat-core";
-import type { ChatMessage } from "../lib/types";
+import type { ChatMessage, ImagesRequest } from "../lib/types";
 
 // ── Image Generation ─────────────────────────────────────────────────────────
+
+// OpenAI's gpt-image-* family is only served on the dedicated /api/v1/images
+// endpoint and hard-404s on /chat/completions. Route it there directly.
+function usesImagesEndpoint(model: string): boolean {
+  return /^openai\/gpt-image/i.test(model);
+}
+
+// OpenRouter's 404 for an images-endpoint-only model is specific and stable:
+// "...cannot be used with the chat/completions endpoint. Use the /api/v1/images
+// endpoint instead." Use it as a fallback trigger so unknown models self-heal.
+function isImagesEndpointError(err: unknown): boolean {
+  return err instanceof Error && /\/api\/v1\/images|images endpoint/i.test(err.message);
+}
+
+function buildImagesBody(model: string, prompt: string, opts: any): ImagesRequest {
+  const body: ImagesRequest = { model, prompt };
+  if (opts.aspectRatio) body.aspect_ratio = opts.aspectRatio;
+  if (opts.imageSize) body.size = opts.imageSize;
+  const ext = extname(opts.save).slice(1).toLowerCase();
+  const fmt = ext === "jpg" ? "jpeg" : ext;
+  if (fmt === "png" || fmt === "jpeg" || fmt === "webp" || fmt === "svg") {
+    body.output_format = fmt;
+  }
+  return body;
+}
+
+async function generateViaImagesEndpoint(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  opts: any
+): Promise<{ b64: string; mime: string }> {
+  const resp = await imageGeneration(apiKey, buildImagesBody(model, prompt, opts));
+  const first = resp.data?.[0];
+  const b64 = first?.b64_json ?? "";
+  if (!b64) throw new Error("No image returned from /api/v1/images endpoint");
+  return { b64, mime: first?.media_type ?? "image/png" };
+}
+
+// Write decoded image bytes to disk and print the result. Shared by both the
+// chat/completions image path and the dedicated /images endpoint path.
+function saveImageBytes(
+  b64: string,
+  mime: string,
+  opts: any,
+  model: string,
+  prompt: string,
+  latencyMs: number,
+  format: string
+): void {
+  const isSvg = mime === "image/svg+xml";
+  const imgBuf = Buffer.from(b64, "base64");
+  let outPath = resolve(opts.save);
+
+  if (isSvg && !outPath.endsWith(".svg")) {
+    outPath = outPath.replace(/\.(png|jpg|jpeg|webp|gif)$/i, ".svg");
+    if (!opts.quiet) {
+      console.log(chalk.yellow(`⚠ SVG output — saving as ${extname(outPath)}`));
+    }
+  }
+
+  const dir = dirname(outPath);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writeFileSync(outPath, imgBuf);
+
+  const sizeKb = imgBuf.length / 1024;
+
+  if (format === "json") {
+    console.log(JSON.stringify({
+      model,
+      prompt,
+      output: outPath,
+      size_bytes: imgBuf.length,
+      size_kb: Math.round(sizeKb * 10) / 10,
+      latency_ms: latencyMs,
+    }, null, 2));
+  } else if (!opts.quiet) {
+    console.log(chalk.green(`✓ Saved to ${outPath} (${sizeKb.toFixed(0)}KB)`));
+    console.log(chalk.dim(`  Model: ${model} • ${latencyMs}ms`));
+  }
+}
 
 export function createImageCommand(): Command {
   const cmd = new Command("image")
@@ -84,69 +165,58 @@ export function createImageCommand(): Command {
       const startTime = Date.now();
 
       try {
-        const result = await handleNonStream(apiKey, request, {});
+        let saved: { b64: string; mime: string } | null = null;
+        let httpUrl: string | null = null;
+        let textFallback: string | null = null;
+
+        if (usesImagesEndpoint(model)) {
+          // Known images-endpoint-only model — skip the wasted chat/completions 404.
+          saved = await generateViaImagesEndpoint(apiKey, model, prompt, opts);
+        } else {
+          try {
+            const result = await handleNonStream(apiKey, request, {});
+            const respMessage = result.response.choices?.[0]?.message;
+            const respImages = (respMessage as any)?.images ?? [];
+
+            if (respImages.length > 0) {
+              const url = respImages[0]?.image_url?.url ?? respImages[0]?.url ?? "";
+              if (url.startsWith("data:")) {
+                const b64 = url.split(",")[1] ?? "";
+                const mime = url.match(/^data:([^;]+);base64,/)?.[1] ?? "image/png";
+                saved = { b64, mime };
+              } else if (url.startsWith("http")) {
+                httpUrl = url;
+              }
+            } else {
+              textFallback = respMessage?.content ?? "";
+            }
+          } catch (err) {
+            // Model is images-endpoint-only but wasn't matched upfront — retry there.
+            if (isImagesEndpointError(err)) {
+              saved = await generateViaImagesEndpoint(apiKey, model, prompt, opts);
+            } else {
+              throw err;
+            }
+          }
+        }
+
         const latencyMs = Date.now() - startTime;
         spinner?.stop();
 
-        const respMessage = result.response.choices?.[0]?.message;
-        const respImages = (respMessage as any)?.images ?? [];
-        const savePath = resolve(opts.save);
-
-        if (respImages.length > 0) {
-          const img = respImages[0];
-          const url = img?.image_url?.url ?? img?.url ?? "";
-
-          if (url.startsWith("data:")) {
-            const parts = url.split(",");
-            const b64 = parts[1] ?? "";
-            const mimeMatch = url.match(/^data:([^;]+);base64,/);
-            const mime = mimeMatch ? mimeMatch[1] : "image/png";
-            const isSvg = mime === "image/svg+xml";
-            const imgBuf = Buffer.from(b64, "base64");
-            let outPath = savePath;
-
-            if (isSvg && !outPath.endsWith(".svg")) {
-              outPath = outPath.replace(/\.(png|jpg|jpeg|webp|gif)$/i, ".svg");
-              if (!opts.quiet) {
-                console.log(
-                  chalk.yellow(`⚠ SVG output — saving as ${extname(outPath)}`)
-                );
-              }
-            }
-
-            const dir = dirname(outPath);
-            if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-            writeFileSync(outPath, imgBuf);
-
-            const sizeKb = imgBuf.length / 1024;
-
-            if (format === "json") {
-              console.log(JSON.stringify({
-                model,
-                prompt,
-                output: outPath,
-                size_bytes: imgBuf.length,
-                size_kb: Math.round(sizeKb * 10) / 10,
-                latency_ms: latencyMs,
-              }, null, 2));
-            } else if (!opts.quiet) {
-              console.log(chalk.green(`✓ Saved to ${outPath} (${sizeKb.toFixed(0)}KB)`));
-              console.log(chalk.dim(`  Model: ${model} • ${latencyMs}ms`));
-            }
-          } else if (url.startsWith("http")) {
-            if (format === "json") {
-              console.log(JSON.stringify({ model, prompt, url, latency_ms: latencyMs }, null, 2));
-            } else if (!opts.quiet) {
-              console.log(chalk.yellow(`Image URL: ${url}`));
-            }
+        if (saved) {
+          saveImageBytes(saved.b64, saved.mime, opts, model, prompt, latencyMs, format);
+        } else if (httpUrl) {
+          if (format === "json") {
+            console.log(JSON.stringify({ model, prompt, url: httpUrl, latency_ms: latencyMs }, null, 2));
+          } else if (!opts.quiet) {
+            console.log(chalk.yellow(`Image URL: ${httpUrl}`));
           }
         } else {
-          // No images in response — model may have returned text
-          const content = respMessage?.content ?? "";
-          if (content) {
+          // No image returned — model may have replied with text instead.
+          if (textFallback) {
             if (!opts.quiet) {
               console.log(chalk.yellow("No image in response. Model returned text:"));
-              console.log(content);
+              console.log(textFallback);
             }
           } else {
             if (!opts.quiet) console.log(chalk.yellow("No image in response"));
