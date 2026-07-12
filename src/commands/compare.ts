@@ -8,6 +8,7 @@ import {
   hasTools,
   hasReasoning,
   getModelModality,
+  getPrimaryPrice,
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks } from "../lib/artificial-analysis";
 import { getFormat, outputTable, formatPriceStr, formatTps, formatCtx, formatDollars, estimateCost } from "../lib/format";
@@ -105,8 +106,8 @@ export function compareCommand(): Command {
         ]);
 
         rows.push([
-          chalk.bold("Combined/M"),
-          ...models.map((m) => formatPriceStr(combinedPrice(m))),
+          chalk.bold("Combined"),
+          ...models.map((m) => getPrimaryPrice(m).display),
         ]);
 
         rows.push([

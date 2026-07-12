@@ -64,10 +64,10 @@ export function formatPriceStr(pricePerMillion: number | undefined): string {
 
 export function formatPerImagePrice(pricePerImageToken: number | null | undefined): string {
   if (pricePerImageToken == null || pricePerImageToken === 0) return "free";
-  // Convert per-token to per-image (assuming ~1000 tokens per image)
-  const pricePerImage = pricePerImageToken * 1000;
-  if (pricePerImage < 0.01) return "<$0.01/img";
-  return `$${pricePerImage.toFixed(2)}/img`;
+  // 4096 image tokens = 1 megapixel (≈ 1 standard image)
+  const pricePerMP = pricePerImageToken * 4096;
+  if (pricePerMP < 0.01) return "<$0.01/img";
+  return `$${pricePerMP.toFixed(2)}/img`;
 }
 
 export function formatRequestPrice(pricePerRequest: number): string {
@@ -105,8 +105,8 @@ const PRICING_UNITS: Record<string, string> = {
   completion: "/ 1M tokens",
   request: "",
   image: "/ image",
-  image_output: "/ image",
-  image_token: "/ 1M image tokens",
+  image_output: "/ megapixel",
+  image_token: "/ megapixel",
   audio: "/ 1M audio tokens",
   audio_output: "/ 1M audio tokens",
   web_search: "/ search",
@@ -133,13 +133,18 @@ export function formatPricingDimension(
 
   // Per-request prices show raw value; token/unit prices show per-1M
   const isPerRequest = key === "request" || key === "web_search";
-  const displayValue = isPerRequest
-    ? n < 0.0001
-      ? "<$0.0001"
-      : n < 0.01
-        ? `$${n.toFixed(4)}`
-        : `$${n.toFixed(2)}`
-    : formatPriceStr(n * 1_000_000);
+  // image_output / image_token are per-image-token (4096 tokens = 1 megapixel)
+  const isImageToken = key === "image_output" || key === "image_token";
+  let displayValue: string;
+  if (isPerRequest) {
+    displayValue = n < 0.0001 ? "<$0.0001" : n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
+  } else if (isImageToken) {
+    // Convert per-image-token to per-megapixel (×4096)
+    const perMP = n * 4096;
+    displayValue = perMP < 0.01 ? "<$0.01" : `$${perMP.toFixed(2)}`;
+  } else {
+    displayValue = formatPriceStr(n * 1_000_000);
+  }
 
   return `    ${label.padEnd(14)} ${displayValue}${unit ? " " + unit : ""}`;
 }

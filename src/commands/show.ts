@@ -172,7 +172,7 @@ export function showCommand(): Command {
             if (v > 0) headlineVals[key] = v;
           }
 
-          const dims = ["prompt", "completion", "image_output", "audio_output", "request"];
+          const dims = ["prompt", "completion", "image_output", "image_token", "audio_output", "request"];
           let showedRange = false;
           for (const dim of dims) {
             const vals = endpoints
@@ -186,15 +186,19 @@ export function showCommand(): Command {
             showedRange = true;
             const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
             const label = dim.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).padEnd(14);
-            const unit = dim === "request" ? "" : "/ 1M tokens";
-            const fmt = (n: number) =>
-              dim === "request"
-                ? n < 0.0001
-                  ? "<$0.0001"
-                  : n < 0.01
-                    ? `$${n.toFixed(4)}`
-                    : `$${n.toFixed(2)}`
-                : formatPriceStr(n * 1_000_000);
+            const isImageTok = dim === "image_output" || dim === "image_token";
+            const unit = dim === "request" ? "" : isImageTok ? "/ megapixel" : "/ 1M tokens";
+            const fmt = (n: number) => {
+              if (dim === "request") {
+                return n < 0.0001 ? "<$0.0001" : n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
+              }
+              if (isImageTok) {
+                // 4096 image tokens = 1 megapixel
+                const perMP = n * 4096;
+                return perMP < 0.01 ? "<$0.01" : `$${perMP.toFixed(2)}`;
+              }
+              return formatPriceStr(n * 1_000_000);
+            };
             if (min === max) {
               console.log(`    ${label} ${fmt(min)}${unit ? " " + unit : ""}`);
             } else {

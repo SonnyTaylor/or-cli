@@ -395,10 +395,16 @@ export function combinedPrice(model: ORModel): number {
   const input = parseFloat(model.pricing?.prompt ?? "0") * 1_000_000;
   const output = parseFloat(model.pricing?.completion ?? "0") * 1_000_000;
   
-  // For models with per-image pricing and zero token pricing
+  // For image gen models with per-image-token pricing and zero token pricing
+  const imgOut = parseFloat(model.pricing?.image_output ?? "0") || parseFloat(model.pricing?.image_token ?? "0");
+  if (imgOut > 0 && input === 0 && output === 0) {
+    return imgOut * 4096 * 1_000_000; // Return per 1M images (for sorting consistency)
+  }
+  
+  // For models with per-image input pricing and zero token pricing
   const imagePrice = parseFloat(model.pricing?.image ?? "0");
   if (imagePrice > 0 && input === 0 && output === 0) {
-    return imagePrice * 1_000_000; // Return per 1M image tokens
+    return imagePrice * 1_000_000; // Return per 1M image inputs
   }
   
   // Weighted 3:1 input:output
@@ -455,16 +461,12 @@ function fmtReqPrice(n: number): { display: string; sortValue: number } {
 
 function fmtImgPrice(n: number): { display: string; sortValue: number } {
   if (n === 0) return { display: "free", sortValue: 0 };
-  const perImage = n * 1000;
-  const perM = n * 1_000_000;
-  // For image token pricing, per-image is almost always the more intuitive unit.
-  // Only show per-M if per-image would be > $10 (i.e. extremely expensive).
-  if (perImage < 10.0) {
-    const disp = perImage < 0.01 ? "<$0.01/img" : `$${perImage.toFixed(2)}/img`;
-    return { display: disp, sortValue: perImage };
-  }
-  const disp = perM < 0.01 ? "<$0.01/M img" : `$${perM.toFixed(2)}/M img`;
-  return { display: disp, sortValue: perM };
+  // image_output / image_token are price per image token.
+  // 4096 image tokens = 1 megapixel (16×16 pixel grid cells).
+  // Multiply by 4096 to get per-megapixel (≈ per-image for standard sizes).
+  const perMP = n * 4096;
+  if (perMP < 0.01) return { display: "<$0.01/img", sortValue: perMP };
+  return { display: `$${perMP.toFixed(2)}/img`, sortValue: perMP };
 }
 
 import { PRICING_FALLBACKS } from "./pricing-fallbacks";
