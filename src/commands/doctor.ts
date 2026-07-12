@@ -47,14 +47,19 @@ async function checkORKey(): Promise<CheckResult> {
     return { label: "OpenRouter API Key", ok: false, detail: "Not set. Run `or auth` or set OPENROUTER_API_KEY" };
   }
 
-  // Test connectivity
+  // Validate against an auth-required endpoint. /models is public and returns
+  // 200 for any key (even garbage), so it can't detect a revoked/invalid key.
+  // /key requires a valid key and 401s otherwise.
   try {
-    const res = await apiFetch("https://openrouter.ai/api/v1/models?limit=1", {
+    const res = await apiFetch("https://openrouter.ai/api/v1/key", {
       headers: { Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(10000),
     });
     if (res.ok) {
       return { label: "OpenRouter API Key", ok: true, detail: `Valid (${key.slice(0, 12)}...)` };
+    }
+    if (res.status === 401) {
+      return { label: "OpenRouter API Key", ok: false, detail: `Invalid or revoked — run \`or auth --or-key <key>\`` };
     }
     return { label: "OpenRouter API Key", ok: false, detail: `Invalid or expired (HTTP ${res.status})` };
   } catch (err) {
