@@ -95,4 +95,4 @@ or show xiaomi/mimo-v2.5            # Check specific model
 - **PDFs work with any model** — server-side parsing handles it.
 - **Cost** — multimodal inputs cost more than text-only due to token usage.
 - **`--audio` is for analysis** — for raw transcription, use `or transcribe`.
-- **`--image` is for understanding** — for image generation, use `or create image`.
+- **`or ask --image` is for understanding** (describe, extract, answer questions about an image). To **generate** images use `or create image`, and to **edit/transform** an image use `or create image "prompt" --image input.png` — attaching an image while generating is fully supported there.

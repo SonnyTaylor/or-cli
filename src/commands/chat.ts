@@ -159,7 +159,8 @@ export function chatCommand(): Command {
       if (opts.serverCache) attachments.push("cached");
       if (opts.heal) attachments.push("healed");
 
-      const useStream = opts.stream ?? (isTty && !opts.json && !opts.quiet);
+      // Streaming drops image parts — --save requires the full response.
+      const useStream = opts.save ? false : (opts.stream ?? (isTty && !opts.json && !opts.quiet));
       const startTime = Date.now();
 
       // ── Image gen detection ─────────────────────────────────────────

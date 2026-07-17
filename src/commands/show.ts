@@ -14,6 +14,7 @@ import {
   isPerImagePriced,
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks } from "../lib/artificial-analysis";
+import { buildAABenchmarkIndex } from "../lib/model-match";
 import { getFormat, formatPriceStr, formatTps, modalityEmoji, formatCtxLong, formatAllPricing } from "../lib/format";
 import { PRICING_FALLBACKS } from "../lib/pricing-fallbacks";
 import type { GlobalOptions, ORModel } from "../lib/types";
@@ -36,7 +37,8 @@ export function showCommand(): Command {
   const cmd = new Command("show")
     .description("Show detailed information about a specific model")
     .argument("<model-id>", "Model ID (e.g. deepseek/deepseek-v4-flash)")
-    .option("--benchmarks", "Include AA benchmark scores")
+    .option("--benchmarks", "Force AA benchmark section (default: on when an AA key is set)")
+    .option("--no-benchmarks", "Hide AA benchmark section")
     .option("--json", "Output as JSON")
     .option("--quiet", "Suppress non-error output")
     .option("--no-cache", "Bypass cache")
@@ -98,19 +100,19 @@ export function showCommand(): Command {
           );
         }
 
-        // Optionally fetch benchmarks
+        // Benchmarks are shown automatically whenever an AA key is available
+        // (disable with --no-benchmarks).
         let aaModel = null;
-        if (opts.benchmarks) {
-          const aaKey = getAAKey();
-          if (aaKey) {
-            try {
-              const aaModels = await fetchLLMBenchmarks(aaKey, opts.noCache);
-              aaModel =
-                aaModels.find((bm) => bm.slug === m.id.split("/").pop()) ?? null;
-            } catch (err) {
-              spinner?.warn(`Could not fetch benchmarks: ${err}`);
-            }
+        const aaKey = getAAKey();
+        if (opts.benchmarks !== false && aaKey) {
+          try {
+            const aaModels = await fetchLLMBenchmarks(aaKey, opts.noCache);
+            aaModel = buildAABenchmarkIndex(aaModels, [m]).get(m.id) ?? null;
+          } catch (err) {
+            spinner?.warn(`Could not fetch benchmarks: ${err}`);
           }
+        } else if (opts.benchmarks === true && !aaKey) {
+          spinner?.warn("No AA API key set. Run `or auth --aa-key <key>` to enable benchmarks.");
         }
 
         spinner?.stop();

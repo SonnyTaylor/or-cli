@@ -7,7 +7,7 @@ import { requireOpenRouterKey, getDefaultModel } from "../lib/config";
 import { getFormat, error, formatDollars } from "../lib/format";
 import { formatNetworkError } from "../lib/fetch";
 import { apiFetch } from "../lib/fetch";
-import { fetchModels, isImageGenModel, isVideoModel, isSpeechModel, imageGeneration } from "../lib/openrouter";
+import { fetchModels, isImageGenModel, isImageEditModel, isVideoModel, isSpeechModel, imageGeneration } from "../lib/openrouter";
 import { buildMessages, buildRequest, buildExtraHeaders, handleNonStream, getMimeType, IMAGE_EXTS, readStdin } from "../lib/chat-core";
 import type { ChatMessage, ImagesRequest } from "../lib/types";
 
@@ -26,8 +26,33 @@ function isImagesEndpointError(err: unknown): boolean {
   return err instanceof Error && /\/api\/v1\/images|images endpoint/i.test(err.message);
 }
 
-function buildImagesBody(model: string, prompt: string, opts: any): ImagesRequest {
+// Read input image files (for image-to-image / editing) into data URLs.
+function readInputImages(paths: string[]): string[] {
+  return paths.map((p) => {
+    const imgPath = resolve(p);
+    if (!existsSync(imgPath)) {
+      error(`Input image not found: ${p}`);
+      process.exit(2);
+    }
+    const b64 = readFileSync(imgPath).toString("base64");
+    const mime = getMimeType(imgPath, IMAGE_EXTS, "image/jpeg");
+    return `data:${mime};base64,${b64}`;
+  });
+}
+
+function buildImagesBody(
+  model: string,
+  prompt: string,
+  opts: any,
+  inputImages: string[]
+): ImagesRequest {
   const body: ImagesRequest = { model, prompt };
+  if (inputImages.length > 0) {
+    body.input_references = inputImages.map((url) => ({
+      type: "image_url" as const,
+      image_url: { url },
+    }));
+  }
   if (opts.aspectRatio) body.aspect_ratio = opts.aspectRatio;
   if (opts.imageSize) body.size = opts.imageSize;
   const ext = extname(opts.save).slice(1).toLowerCase();
@@ -42,9 +67,10 @@ async function generateViaImagesEndpoint(
   apiKey: string,
   model: string,
   prompt: string,
-  opts: any
+  opts: any,
+  inputImages: string[]
 ): Promise<{ b64: string; mime: string }> {
-  const resp = await imageGeneration(apiKey, buildImagesBody(model, prompt, opts));
+  const resp = await imageGeneration(apiKey, buildImagesBody(model, prompt, opts, inputImages));
   const first = resp.data?.[0];
   const b64 = first?.b64_json ?? "";
   if (!b64) throw new Error("No image returned from /api/v1/images endpoint");
@@ -96,9 +122,10 @@ function saveImageBytes(
 
 export function createImageCommand(): Command {
   const cmd = new Command("image")
-    .description("Generate an image from a text prompt")
+    .description("Generate an image from a text prompt (add --image for editing / image-to-image)")
     .argument("[prompt...]", "Text prompt describing the image")
     .option("-m, --model <model>", "Image generation model")
+    .option("--image <paths...>", "Input image(s) — edit, restyle, or combine them (image-to-image)")
     .option("--save <path>", "Output file path", "output.png")
     .option("--aspect-ratio <ratio>", "Aspect ratio (e.g. 16:9, 1:1)")
     .option("--image-size <size>", "Image size (e.g. 1024x1024)")
@@ -120,20 +147,32 @@ export function createImageCommand(): Command {
         }
       }
 
+      // Input images for editing / image-to-image (validated up front)
+      const inputPaths: string[] = opts.image
+        ? Array.isArray(opts.image) ? opts.image : [opts.image]
+        : [];
+      const inputImages = readInputImages(inputPaths);
+
       // Determine model
       let model = opts.model || getDefaultModel("image");
       if (!model) {
-        // Auto-detect an image model
+        // Auto-detect an image model; when editing, require image input support
         const spinner = opts.quiet ? null : ora("Finding an image generation model...").start();
         try {
           const models = await fetchModels(apiKey);
-          const imageModel = models.find((m) => isImageGenModel(m));
-          if (!imageModel) {
-            spinner?.fail("No image generation models found.");
+          const usable = models.filter(
+            (m) => !m.id.startsWith("~") && m.id !== "openrouter/auto" &&
+              (inputImages.length > 0 ? isImageEditModel(m) : isImageGenModel(m))
+          );
+          if (usable.length === 0) {
+            spinner?.fail("No suitable image generation models found.");
             process.exit(1);
           }
-          model = imageModel.id;
+          model = usable[0]!.id;
           spinner?.stop();
+          if (!opts.quiet) {
+            console.log(chalk.dim(`  No model specified — using ${model}. Set a default with \`or config --set-image <id>\`.`));
+          }
         } catch (err) {
           spinner?.fail("Failed to fetch models");
           error(formatNetworkError(err));
@@ -141,8 +180,17 @@ export function createImageCommand(): Command {
         }
       }
 
+      // Attach input images as content parts (chat/completions image editing)
       const messages: ChatMessage[] = [
-        { role: "user", content: prompt },
+        {
+          role: "user",
+          content: inputImages.length > 0
+            ? [
+                ...inputImages.map((url) => ({ type: "image_url" as const, image_url: { url } })),
+                { type: "text" as const, text: prompt },
+              ]
+            : prompt,
+        },
       ];
 
       const request = buildRequest(
@@ -171,7 +219,7 @@ export function createImageCommand(): Command {
 
         if (usesImagesEndpoint(model)) {
           // Known images-endpoint-only model — skip the wasted chat/completions 404.
-          saved = await generateViaImagesEndpoint(apiKey, model, prompt, opts);
+          saved = await generateViaImagesEndpoint(apiKey, model, prompt, opts, inputImages);
         } else {
           try {
             const result = await handleNonStream(apiKey, request, {});
@@ -193,7 +241,7 @@ export function createImageCommand(): Command {
           } catch (err) {
             // Model is images-endpoint-only but wasn't matched upfront — retry there.
             if (isImagesEndpointError(err)) {
-              saved = await generateViaImagesEndpoint(apiKey, model, prompt, opts);
+              saved = await generateViaImagesEndpoint(apiKey, model, prompt, opts, inputImages);
             } else {
               throw err;
             }
@@ -213,13 +261,22 @@ export function createImageCommand(): Command {
           }
         } else {
           // No image returned — model may have replied with text instead.
-          if (textFallback) {
-            if (!opts.quiet) {
+          const hint = "The model may not support image output. Find image models with `or models -t image` (add --image support check via `or show <id>`).";
+          if (format === "json") {
+            console.log(JSON.stringify({
+              error: "no_image_in_response",
+              model,
+              text: textFallback || undefined,
+              hint,
+            }, null, 2));
+          } else if (!opts.quiet) {
+            if (textFallback) {
               console.log(chalk.yellow("No image in response. Model returned text:"));
               console.log(textFallback);
+            } else {
+              console.log(chalk.yellow("No image in response."));
             }
-          } else {
-            if (!opts.quiet) console.log(chalk.yellow("No image in response"));
+            console.log(chalk.dim(`  ${hint}`));
           }
           process.exit(1);
         }

@@ -123,6 +123,9 @@ export function askCommand(): Command {
           serverCacheTtl: opts.serverCacheTtl,
           heal: opts.heal,
           pdfEngine: opts.pdfEngine,
+          // --save means the user expects an image back; without declaring
+          // modalities, image-capable models reply with text only.
+          modalities: opts.save ? ["image", "text"] : undefined,
         },
         messages
       );
@@ -137,7 +140,8 @@ export function askCommand(): Command {
       if (opts.serverCache) attachments.push("cached");
       if (opts.heal) attachments.push("healed");
 
-      const useStream = opts.stream ?? (isTty && !opts.json && !opts.quiet);
+      // Streaming drops image parts — --save requires the full response.
+      const useStream = opts.save ? false : (opts.stream ?? (isTty && !opts.json && !opts.quiet));
       const startTime = Date.now();
 
       // ── Model info for image gen detection ──────────────────────────

@@ -23,11 +23,15 @@ or ask "Explain monads" -m deepseek/deepseek-v4-flash
 # Generate an image
 or create image "A mountain logo" --save logo.png
 
+# Edit an image (image-to-image)
+or create image "Make the sky purple" --image photo.jpg --save edited.png
+
 # Transcribe audio
 or transcribe recording.mp3
 
-# Find models
-or models --tools --sort price -n 5
+# Find models — sorted by live popularity, with benchmark scores inline
+or models -n 20
+or models --tools --sort intelligence -n 5
 ```
 
 ## Commands
@@ -41,7 +45,7 @@ or models --tools --sort price -n 5
 ### Generation
 | Command | Description |
 |---------|-------------|
-| `or create image` | Image generation from text prompts |
+| `or create image` | Image generation and editing (`--image` for image-to-image) |
 | `or create video` | Video generation (async — submits, polls, downloads) |
 | `or create audio` | Text-to-speech with voice selection |
 
@@ -55,10 +59,10 @@ or models --tools --sort price -n 5
 ### Discovery
 | Command | Description |
 |---------|-------------|
-| `or models` | Search, filter, and list 370+ models |
-| `or show` | Detailed model info with price ranges |
-| `or compare` | Side-by-side model comparison |
-| `or benchmarks` | AA benchmark data (LLM, image, video, TTS) |
+| `or models` | Search/filter models — live popularity sort, benchmark scores, release dates |
+| `or show` | Detailed model info with price ranges and benchmarks |
+| `or compare` | Side-by-side model comparison (benchmarks automatic) |
+| `or benchmarks` | AA benchmarks with OpenRouter IDs matched automatically |
 | `or rankings` | Daily token usage rankings |
 | `or providers` | Provider datacenter info |
 | `or endpoints` | Per-provider uptime, latency, pricing |

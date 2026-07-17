@@ -2,23 +2,29 @@
 
 ## Core Workflow
 
-**Always start broad, then narrow.** Don't assume a model exists or is the best choice.
+**Never pick a model from memory — your training data is stale.** Models are released
+weekly; the model you remember as "best" has usually been superseded. Always discover:
 
 ```bash
-# 1. See what's available
-or models                          # List all models
+# 1. See what's actually being used right now (default sort = live popularity,
+#    with Intel/Coding benchmark scores and release dates inline)
+or models -n 20
 or models "coding"                 # Search by keyword
-or models -t text                  # Filter by type
+or models -t text -n 20            # Filter by type
 
 # 2. Narrow down
-or models --tools --sort price     # Tool-capable, cheapest first
-or models --reasoning -n 10        # Top 10 reasoning models
-or models --max-cost 1 -c 128000   # Under $1/M with 128K+ context
+or models --tools --sort intelligence -n 10   # Smartest tool-capable models
+or models --reasoning -n 10                   # Top reasoning models
+or models --max-cost 1 -c 128000              # Under $1/M with 128K+ context
+or models --new                               # Released in the last 30 days
 
 # 3. Inspect a candidate
-or show <model-id>                 # Full details with price ranges
+or show <model-id>                 # Full details, pricing, benchmarks
 or compare id1 id2 id3             # Side-by-side
 ```
+
+The default listing is sorted by **live weekly usage** and shows **benchmark scores**
+(when an AA key is set) and **release dates** — trust that over what you remember.
 
 ## Critical: Read the Description
 
@@ -50,9 +56,9 @@ Common traps:
 | `-c, --min-context <n>` | Minimum context window |
 | `-p, --provider <name>` | Filter by provider name prefix in model ID |
 | `--param <param...>` | Filter by supported parameter (e.g. `tools`, `reasoning`, `response_format`, `structured_outputs`) |
-| `-s, --sort <field>` | Sort by: `price`, `context`, `name`, `created`, `usage`, `rank` |
+| `-s, --sort <field>` | Sort by: `popular` (default), `newest`, `price`, `context`, `name`, `intelligence`, `coding` |
 | `-n, --limit <n>` | Max results |
-| `--benchmarks` | Include Artificial Analysis benchmark scores (requires AA API key) |
+| `--no-benchmarks` | Hide the AA benchmark columns (shown automatically when an AA key is set) |
 | `--new` | Only models added in the last 30 days |
 | `--expiring` | Only models with an expiration date (going away soon) |
 | `--tilde` | Include `~` prefix 'latest' alias models |
@@ -85,11 +91,13 @@ or models                          # Styled terminal table (default)
 ## Sorting
 
 ```bash
-or models -s price                 # Cheapest first (default: name)
+or models                          # Most-used this week (default)
+or models -s intelligence          # Smartest first (API-side benchmark rank)
+or models -s coding                # Best coders first
+or models -s newest                # Newest first
+or models -s price                 # Cheapest first
 or models -s context               # Largest context first
-or models -s created               # Newest first
-or models -s usage                 # Most used (from API)
-or models -s rank                  # Best ranked (from API)
+or models -s name                  # Alphabetical
 ```
 
 ## Provider-Level Details
@@ -108,10 +116,8 @@ or providers --region US
 ## Comparing Models
 
 ```bash
-or compare deepseek/deepseek-v4-pro xiaomi/mimo-v2.5-pro       # Side-by-side
-or compare model1 model2 --benchmarks                           # With AA scores
+or compare deepseek/deepseek-v4-pro xiaomi/mimo-v2.5-pro       # Side-by-side (AA scores automatic)
 or compare model1 model2 --cost-estimate                        # With cost per session
-or compare model1 model2 --benchmarks --cost-estimate           # Full comparison
 ```
 
 The `--cost-estimate` flag shows estimated cost for a typical coding session (100K input / 50K output) and a larger session (500K input / 100K output).

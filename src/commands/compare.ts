@@ -11,15 +11,17 @@ import {
   getPrimaryPrice,
 } from "../lib/openrouter";
 import { fetchLLMBenchmarks } from "../lib/artificial-analysis";
+import { buildAABenchmarkIndex, type AABenchmarkIndex } from "../lib/model-match";
 import { getFormat, outputTable, formatPriceStr, formatTps, formatCtx, formatDollars, estimateCost } from "../lib/format";
 import { formatNetworkError } from "../lib/fetch";
-import type { ORModel, AAModel, GlobalOptions } from "../lib/types";
+import type { ORModel, GlobalOptions } from "../lib/types";
 
 export function compareCommand(): Command {
   const cmd = new Command("compare")
     .description("Compare multiple models side-by-side")
     .argument("<model-ids...>", "Two or more model IDs to compare")
-    .option("--benchmarks", "Include AA benchmark scores")
+    .option("--benchmarks", "Force AA benchmark rows (default: on when an AA key is set)")
+    .option("--no-benchmarks", "Hide AA benchmark rows")
     .option("--cost-estimate", "Show estimated cost per typical coding session (100K in / 50K out)")
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
@@ -52,18 +54,19 @@ export function compareCommand(): Command {
           process.exit(1);
         }
 
-        // Fetch benchmarks if requested
-        let benchmarks: Map<string, AAModel> | null = null;
-        if (opts.benchmarks) {
-          const aaKey = getAAKey();
-          if (aaKey) {
-            try {
-              const aaModels = await fetchLLMBenchmarks(aaKey, opts.noCache);
-              benchmarks = new Map(aaModels.map((m) => [m.slug, m]));
-            } catch (err) {
-              spinner?.warn(`Could not fetch benchmarks: ${err}`);
-            }
+        // Benchmarks are shown automatically whenever an AA key is available
+        // (disable with --no-benchmarks).
+        let benchmarks: AABenchmarkIndex | null = null;
+        const aaKey = getAAKey();
+        if (opts.benchmarks !== false && aaKey) {
+          try {
+            const aaModels = await fetchLLMBenchmarks(aaKey, opts.noCache);
+            benchmarks = buildAABenchmarkIndex(aaModels, models);
+          } catch (err) {
+            spinner?.warn(`Could not fetch benchmarks: ${err}`);
           }
+        } else if (opts.benchmarks === true && !aaKey) {
+          spinner?.warn("No AA API key set. Run `or auth --aa-key <key>` to enable benchmarks.");
         }
 
         spinner?.stop();
@@ -79,7 +82,7 @@ export function compareCommand(): Command {
             context_length: m.context_length,
             tools: hasTools(m),
             reasoning: hasReasoning(m),
-            benchmarks: benchmarks?.get(m.id.split("/").pop() ?? "") ?? null,
+            benchmarks: benchmarks?.get(m.id) ?? null,
           }));
           console.log(JSON.stringify(data, null, 2));
           return;
@@ -129,7 +132,7 @@ export function compareCommand(): Command {
           rows.push([
             chalk.bold("Coding"),
             ...models.map((m) => {
-              const bm = benchmarks!.get(m.id.split("/").pop() ?? "");
+              const bm = benchmarks!.get(m.id);
               return bm?.evaluations?.artificial_analysis_coding_index?.toFixed(0) ?? "—";
             }),
           ]);
@@ -137,7 +140,7 @@ export function compareCommand(): Command {
           rows.push([
             chalk.bold("Intelligence"),
             ...models.map((m) => {
-              const bm = benchmarks!.get(m.id.split("/").pop() ?? "");
+              const bm = benchmarks!.get(m.id);
               return bm?.evaluations?.artificial_analysis_intelligence_index?.toFixed(0) ?? "—";
             }),
           ]);
@@ -145,7 +148,7 @@ export function compareCommand(): Command {
           rows.push([
             chalk.bold("Speed (t/s)"),
             ...models.map((m) => {
-              const bm = benchmarks!.get(m.id.split("/").pop() ?? "");
+              const bm = benchmarks!.get(m.id);
               return bm?.median_output_tokens_per_second ? formatTps(bm.median_output_tokens_per_second) : "—";
             }),
           ]);

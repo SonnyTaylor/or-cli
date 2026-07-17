@@ -121,6 +121,8 @@ export interface ChatRequest {
 export interface ImagesRequest {
   model: string;
   prompt: string;
+  /** Input images for image-to-image / editing. HTTP(S) URLs or data URLs. */
+  input_references?: Array<{ type: "image_url"; image_url: { url: string } }>;
   n?: number;
   aspect_ratio?: string;
   size?: string;

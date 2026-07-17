@@ -53,7 +53,6 @@ or-cli/
 │   │   ├── rerank.ts         # Document reranking
 │   │   ├── show.ts           # Single model details
 │   │   ├── transcribe.ts     # Speech-to-text (audio transcription)
-│   │   ├── tts.ts            # DEPRECATED — use `create audio` instead
 │   │   └── version.ts        # Version + environment info
 │   └── lib/
 │       ├── artificial-analysis.ts  # AA API client
@@ -64,6 +63,7 @@ or-cli/
 │       ├── fetch.ts                # fetch wrapper with TLS error handling
 │       ├── format.ts               # Output formatting helpers
 │       ├── history.ts              # JSONL history logging
+│       ├── model-match.ts          # AA↔OpenRouter model matching (token-based, creator-aware)
 │       ├── openrouter.ts           # OR API client + model helpers
 │       ├── pricing-fallbacks.ts    # Hardcoded pricing for models the API under-reports
 │       └── types.ts                # TypeScript interfaces
@@ -78,11 +78,11 @@ or-cli/
 
 ## Versioning
 
-We use semver. Current: **v0.5.0**
+We use semver. Current: **v0.6.0**
 
 **Bump the version in both places when releasing:**
-1. `package.json` → `"version": "0.5.0"`
-2. `src/cli.ts` → `.version("0.5.0")`
+1. `package.json` → `"version": "0.6.0"`
+2. `src/cli.ts` → `.version("0.6.0")`
 
 The `or version` command reads from `package.json` at runtime.
 
@@ -104,7 +104,7 @@ Commands are organized by **user intent**, not by API endpoint:
 ### Generation
 | Command | Purpose |
 |---------|---------|
-| `or create image` | Image generation (`--save`, `--aspect-ratio`, `--style`) |
+| `or create image` | Image generation + editing (`--image` inputs, `--save`, `--aspect-ratio`, `--style`) |
 | `or create video` | Video generation (async: submits job, polls, downloads). `--resolution`, `--duration`, `--frame-image` |
 | `or create audio` | TTS (`--voice`, `--format`, `--speed`, `--list-models`, `--list-voices`) |
 
@@ -166,7 +166,7 @@ This project runs on **Bun**, not Node. Key differences that have bitten us:
 
 2. **Per-image pricing** — Some models charge per image, not per token. Their `pricing.prompt` and `pricing.completion` are `"0"`, but `pricing.image` has the per-image-token price. The `isPerImagePriced()` and `getPerImagePrice()` helpers detect this.
 
-3. **Benchmark model IDs ≠ OpenRouter IDs** — Artificial Analysis benchmarks show models from many providers. A model like `black-forest-labs/flux-2-max` in benchmarks might not exist on OpenRouter. Use `or benchmarks --or` to cross-reference, or `or models -t image` to find actual IDs.
+3. **Benchmark model IDs ≠ OpenRouter IDs** — Artificial Analysis and OpenRouter name the same model differently (`claude-opus-4-8` vs `anthropic/claude-opus-4.8`; "Nano Banana 2 (Gemini 3.1 Flash Image Preview)" vs `google/gemini-3.1-flash-image-preview`). `src/lib/model-match.ts` handles this: token-based matching with hard constraints (numeric versions must agree exactly, creators must be compatible via an alias table, distinguishing tokens like "flash"/"mini" can't be dropped). `or benchmarks` shows matched OR IDs automatically; `or models`/`or show`/`or compare` attach AA scores via `buildAABenchmarkIndex`. AA benchmarks the same model at multiple reasoning efforts — several AA rows can map to one OR id (the index prefers the shortest AA slug).
 
 4. **`/models/{id}/endpoints`** — Some models are hidden from `/models` but accessible via their endpoints. We use this for per-image pricing enrichment.
 

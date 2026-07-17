@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import chalk from "chalk";
 import { authCommand } from "./commands/auth";
 import { askCommand } from "./commands/ask";
 import { chatCommand } from "./commands/chat";
@@ -26,30 +27,73 @@ const program = new Command();
 
 program
   .name("or")
-  .description("CLI for OpenRouter — search models, send messages, view benchmarks")
-  .version("0.5.0");
+  .description("CLI for OpenRouter — ask models, generate media, discover the best model for the job")
+  .version("0.6.0")
+  .showSuggestionAfterError(true)
+  .configureHelp({ sortSubcommands: false });
 
-program.addCommand(authCommand());
+// Registration order = help order. Grouped by intent: converse → create →
+// process → discover → account/system.
+
+// Converse
 program.addCommand(askCommand());
 program.addCommand(chatCommand());
+
+// Create media
 program.addCommand(createCommand());
+
+// Process
+program.addCommand(embedCommand());
+program.addCommand(transcribeCommand());
+program.addCommand(rerankCommand());
+
+// Discover
 program.addCommand(modelsCommand());
 program.addCommand(showCommand());
 program.addCommand(compareCommand());
 program.addCommand(benchmarksCommand());
-program.addCommand(cacheCommand());
-program.addCommand(historyCommand());
-program.addCommand(endpointsCommand());
-program.addCommand(providersCommand());
-program.addCommand(creditsCommand());
 program.addCommand(rankingsCommand());
-program.addCommand(versionCommand());
-program.addCommand(doctorCommand());
-program.addCommand(costCommand());
+program.addCommand(providersCommand());
+program.addCommand(endpointsCommand());
+
+// Account & system
+program.addCommand(authCommand());
 program.addCommand(configCommand());
+program.addCommand(creditsCommand());
+program.addCommand(costCommand());
+program.addCommand(historyCommand());
 program.addCommand(conversationsCommand());
-program.addCommand(embedCommand());
-program.addCommand(transcribeCommand());
-program.addCommand(rerankCommand());
+program.addCommand(cacheCommand());
+program.addCommand(doctorCommand());
+program.addCommand(versionCommand());
+
+program.addHelpText(
+  "after",
+  `
+${chalk.bold("Common workflows:")}
+  ${chalk.dim("# Ask a question (one-shot)")}
+  or ask "Explain monads" -m deepseek/deepseek-v4-flash
+
+  ${chalk.dim("# Find the right model — sorted by live popularity, with benchmark scores")}
+  or models -n 20
+  or models "coding" --tools --sort intelligence
+
+  ${chalk.dim("# See top benchmarked models with their OpenRouter IDs")}
+  or benchmarks -n 10
+  or benchmarks --type text-to-image -n 10
+
+  ${chalk.dim("# Generate or edit an image")}
+  or create image "A mountain logo" --save logo.png
+  or create image "Make the sky purple" --image photo.jpg --save edited.png
+
+  ${chalk.dim("# Analyze files")}
+  or ask "Describe this" --image photo.jpg
+  or ask "Summarize" --pdf report.pdf
+
+  ${chalk.dim("# Every command supports --json (machine-readable) and --quiet (pipeable)")}
+  or models -t image --json | jq -r '.[].id'
+
+${chalk.dim("Run `or <command> --help` for details on any command.")}`
+);
 
 program.parse();

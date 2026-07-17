@@ -39,7 +39,7 @@ export async function fetchLLMBenchmarks(
     if (cached) return cached;
   }
 
-  const res = await await aaFetch<{ data: AAModel[] }>("/data/llms/models", apiKey);
+  const res = await aaFetch<{ data: AAModel[] }>("/data/llms/models", apiKey);
   const data = res.data;
 
   if (!noCache) {

@@ -89,7 +89,7 @@ or ask "Solve step by step" -m deepseek/deepseek-v4-flash --reasoning-effort hig
 | `--server-cache` | Enable caching |
 | `--server-cache-ttl <seconds>` | Cache TTL |
 | `--heal` | Auto-fix malformed JSON |
-| `--save <path>` | Save generated image |
+| `--save <path>` | Save a generated image (auto-disables streaming, requests image output). Prefer `or create image` for generation/editing |
 | `--json` | Full API response as JSON |
 | `--quiet` | Only response text |
 | `--stream` / `--no-stream` | Streaming control |
@@ -130,3 +130,4 @@ With `--json`: full API response object.
 - **History is logged** unless `--no-log` is passed.
 - **Read model descriptions** with `or show <model-id>` before using.
 - **`--audio` is for analysis** (sends audio to model). For generating speech, use `or create audio`.
+- **`--image` is for analysis** (describe/understand). For generating or editing images, use `or create image` (editing: `or create image "prompt" --image input.png`).

@@ -20,10 +20,11 @@ import {
   isSpeechModel,
   getPrimaryPrice,
 } from "../lib/openrouter";
-import { fetchLLMBenchmarks, fetchMediaBenchmarks } from "../lib/artificial-analysis";
+import { fetchLLMBenchmarks } from "../lib/artificial-analysis";
+import { buildAABenchmarkIndex, type AABenchmarkIndex } from "../lib/model-match";
 import { getFormat, outputTable, modalityEmoji, formatCtx, error } from "../lib/format";
 import { formatNetworkError } from "../lib/fetch";
-import type { ORModel, AAModel, GlobalOptions } from "../lib/types";
+import type { ORModel, GlobalOptions } from "../lib/types";
 
 interface FilterOptions extends GlobalOptions {
   type?: string;
@@ -56,12 +57,13 @@ export function modelsCommand(): Command {
     .option("-c, --min-context <n>", "Minimum context window", parseInt)
     .option("-p, --provider <name>", "Filter by provider name prefix in model ID")
     .option("--param <param...>", "Filter by supported parameter (e.g. tools, reasoning, response_format, structured_outputs)")
-    .option("-s, --sort <field>", "Sort by: price, context, name, created, usage, rank", "name")
+    .option("-s, --sort <field>", "Sort by: popular (default), newest, price, context, name, intelligence, coding", "popular")
     .option("-n, --limit <n>", "Max results", parseInt)
     .option("--expiring", "Only models with an expiration date (going away soon)")
     .option("--new", "Only models added in the last 30 days")
     .option("--tilde", "Include ~ prefix 'latest' alias models")
-    .option("--benchmarks", "Include AA benchmark scores (requires AA API key)")
+    .option("--benchmarks", "Force AA benchmark columns (default: on when an AA key is set)")
+    .option("--no-benchmarks", "Hide AA benchmark columns")
     .option("--json", "Output as JSON")
     .option("--md", "Output as Markdown table")
     .option("--quiet", "Suppress non-error output")
@@ -73,9 +75,10 @@ export function modelsCommand(): Command {
       const spinner = opts.quiet ? null : ora("Fetching models...").start();
 
       try {
-        // For usage/rank sorting, we need to fetch with the sort param from the API
-        const apiSort = opts.sort === 'usage' || opts.sort === 'rank' ? opts.sort : undefined;
+        // Popularity/intelligence/coding order comes from the API itself.
+        const apiSort = apiSortFor(opts.sort ?? "popular");
         let models = await fetchModels(apiKey, opts.noCache, apiSort);
+        const allModels = models; // unfiltered, for benchmark matching
 
         // Apply search query
         if (query) {
@@ -122,28 +125,28 @@ export function modelsCommand(): Command {
           models = models.filter((m) => !m.id.startsWith('~'));
         }
 
-        // Sort
-        models = sortModels(models, opts.sort ?? "name");
+        // Sort (API sorts preserve the fetched order)
+        models = sortModels(models, opts.sort ?? "popular");
 
         // Limit
         if (opts.limit) {
           models = models.slice(0, opts.limit);
         }
 
-        // Optionally fetch benchmarks
-        let benchmarks: Map<string, AAModel> | null = null;
-        if (opts.benchmarks) {
-          const aaKey = getAAKey();
-          if (aaKey) {
-            try {
-              const aaModels = await fetchLLMBenchmarks(aaKey, opts.noCache);
-              benchmarks = new Map(aaModels.map((m) => [m.slug, m]));
-            } catch (err) {
-              spinner?.warn(`Could not fetch benchmarks: ${err}`);
-            }
-          } else {
-            spinner?.warn("No AA API key set. Run `or auth --aa-key <key>` to enable benchmarks.");
+        // Benchmarks are shown automatically whenever an AA key is available
+        // (disable with --no-benchmarks). Matching runs against the full,
+        // unfiltered model list so variants resolve correctly.
+        let benchmarks: AABenchmarkIndex | null = null;
+        const aaKey = getAAKey();
+        if (opts.benchmarks !== false && aaKey) {
+          try {
+            const aaModels = await fetchLLMBenchmarks(aaKey, opts.noCache);
+            benchmarks = buildAABenchmarkIndex(aaModels, allModels);
+          } catch (err) {
+            spinner?.warn(`Could not fetch benchmarks: ${err}`);
           }
+        } else if (opts.benchmarks === true && !aaKey) {
+          spinner?.warn("No AA API key set. Run `or auth --aa-key <key>` to enable benchmarks.");
         }
 
         spinner?.stop();
@@ -153,16 +156,34 @@ export function modelsCommand(): Command {
           return;
         }
 
-        // JSON output: return raw API data for programmatic use
+        // JSON output: raw API data, enriched with matched AA benchmarks
         if (format === "json") {
-          console.log(JSON.stringify(models, null, 2));
+          const enriched = benchmarks
+            ? models.map((m) => {
+                const bm = benchmarks!.get(m.id);
+                return bm
+                  ? {
+                      ...m,
+                      benchmarks: {
+                        aa_slug: bm.slug,
+                        intelligence: bm.evaluations.artificial_analysis_intelligence_index ?? null,
+                        coding: bm.evaluations.artificial_analysis_coding_index ?? null,
+                        math: bm.evaluations.artificial_analysis_math_index ?? null,
+                        speed_tps: bm.median_output_tokens_per_second ?? null,
+                        ttft_s: bm.median_time_to_first_token_seconds ?? null,
+                      },
+                    }
+                  : m;
+              })
+            : models;
+          console.log(JSON.stringify(enriched, null, 2));
           return;
         }
 
         // Build output
         const headers = benchmarks
-          ? ["Model", "Modality", "Price", "Context", "🔧", "Coding", "Intel", "Speed"]
-          : ["Model", "Modality", "Price", "Context", "🔧", "🧠"];
+          ? ["Model", "Modality", "Price", "Context", "🔧", "Released", "Intel", "Coding", "Speed"]
+          : ["Model", "Modality", "Price", "Context", "🔧", "🧠", "Released"];
 
         const rows = models.map((m) => {
           const priceDisplay = getPrimaryPrice(m).display;
@@ -175,14 +196,15 @@ export function modelsCommand(): Command {
           ];
 
           if (benchmarks) {
-            const bm = benchmarks.get(m.id.split("/").pop() ?? "");
+            const bm = benchmarks.get(m.id);
             base.push(
-              bm?.evaluations?.artificial_analysis_coding_index?.toFixed(0) ?? "—",
+              formatReleased(m.created),
               bm?.evaluations?.artificial_analysis_intelligence_index?.toFixed(0) ?? "—",
+              bm?.evaluations?.artificial_analysis_coding_index?.toFixed(0) ?? "—",
               bm?.median_output_tokens_per_second?.toFixed(0) ?? "—"
             );
           } else {
-            base.push(hasReasoning(m) ? "✓" : "");
+            base.push(hasReasoning(m) ? "✓" : "", formatReleased(m.created));
           }
 
           return base;
@@ -199,7 +221,10 @@ export function modelsCommand(): Command {
         outputTable(headers, rows, format);
 
         if (format === "table" && !opts.quiet) {
-          console.log(chalk.dim(`\n  ${models.length} models shown`));
+          console.log(chalk.dim(`\n  ${models.length} models shown (sorted by ${opts.sort ?? "popular"})`));
+          if (!benchmarks && !aaKey) {
+            console.log(chalk.dim("  Tip: set an Artificial Analysis key (`or auth --aa-key <key>`) to see benchmark columns here."));
+          }
         }
       } catch (err) {
         spinner?.fail("Failed to fetch models");
@@ -235,6 +260,29 @@ function filterByType(models: ORModel[], type: string): ORModel[] {
   }
 }
 
+/** Map CLI sort names to the /models API's sort values. These orderings only
+ *  exist server-side (live usage and benchmark ranks). */
+function apiSortFor(sort: string): string | undefined {
+  switch (sort) {
+    case "popular":
+    case "usage": // legacy alias
+    case "rank":  // legacy alias
+      return "top-weekly";
+    case "intelligence":
+      return "intelligence-high-to-low";
+    case "coding":
+      return "coding-high-to-low";
+    default:
+      return undefined;
+  }
+}
+
+function formatReleased(created: number | undefined): string {
+  if (!created) return "—";
+  const d = new Date(created * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function sortModels(models: ORModel[], sort: string): ORModel[] {
   switch (sort) {
     case "price":
@@ -243,11 +291,14 @@ function sortModels(models: ORModel[], sort: string): ORModel[] {
       });
     case "context":
       return [...models].sort((a, b) => b.context_length - a.context_length);
-    case "created":
+    case "newest":
+    case "created": // legacy alias
       return [...models].sort((a, b) => (b.created ?? 0) - (a.created ?? 0));
     case "name":
-    default:
       return [...models].sort((a, b) => a.id.localeCompare(b.id));
+    default:
+      // API-side sorts (popular, intelligence, coding) — keep fetched order
+      return models;
   }
 }
 
